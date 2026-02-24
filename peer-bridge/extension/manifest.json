@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Peer Bridge",
+  "version": "0.1.0",
+  "description": "Phase 1: Send text messages to peers in the same room via a WebSocket signaling server.",
+  "action": {
+    "default_title": "Peer Bridge"
+  },
+  "side_panel": {
+    "default_path": "dist/index.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel"]
+}

@@ -1,0 +1,6 @@
+peer-bridge/server/package-lock.json
+peer-bridge/server/node_modules/
+
+# Extension Vite + React UI
+peer-bridge/extension/node_modules/
+peer-bridge/extension/dist/

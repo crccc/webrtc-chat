@@ -1,0 +1,223 @@
+/* App.css – Styles for the Peer Bridge popup (Vite + React port) */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  width: 100%;
+  height: 100vh;
+  background: #0e0e1a;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+/* ── Root ───────────────────────────────────────────────────────────── */
+
+.popup-root {
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.app-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, #7b9cff, #b47dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Join section ───────────────────────────────────────────────────── */
+
+.join-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.join-section label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+/* ── Chat section ───────────────────────────────────────────────────── */
+
+.chat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Status bar ─────────────────────────────────────────────────────── */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #888;
+}
+
+.room-name {
+  color: #7b9cff;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.leave-btn {
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #2a2a42;
+  color: #aaa;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.leave-btn:hover {
+  background: #3a1a2a;
+  color: #ff7b9c;
+}
+
+/* ── Messages ───────────────────────────────────────────────────────── */
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  background: #08081a;
+  border: 1px solid #1e1e38;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-behavior: smooth;
+  min-height: 0;
+}
+
+.messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: #2a2a4a;
+  border-radius: 4px;
+}
+
+.msg {
+  padding: 6px 10px;
+  border-radius: 6px;
+  max-width: 90%;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.4;
+  animation: fadeSlideIn 0.15s ease;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg.self {
+  background: linear-gradient(135deg, #2e3a6e, #3a2e6e);
+  align-self: flex-end;
+  color: #c8d4ff;
+}
+
+.msg.peer {
+  background: #1a1a38;
+  align-self: flex-start;
+  color: #d4d4f0;
+}
+
+.msg.info {
+  background: transparent;
+  align-self: center;
+  color: #666;
+  font-size: 11px;
+  font-style: italic;
+  max-width: 100%;
+  text-align: center;
+}
+
+/* ── Shared input / button ──────────────────────────────────────────── */
+
+input[type='text'] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #252540;
+  border-radius: 6px;
+  background: #0c0c22;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input[type='text']:focus {
+  border-color: #7b9cff;
+  box-shadow: 0 0 0 3px rgba(123, 156, 255, 0.12);
+}
+
+input[type='text']::placeholder {
+  color: #444466;
+}
+
+button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #7b9cff, #9b7bff);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+button:hover {
+  opacity: 0.88;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* ── Send row ───────────────────────────────────────────────────────── */
+
+.input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.input-row input {
+  flex: 1;
+}
