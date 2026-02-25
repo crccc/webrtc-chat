@@ -5,6 +5,11 @@ import CreateRoomSection from './components/CreateRoomSection'
 import JoinSection from './components/JoinSection'
 import ChatSection from './components/ChatSection'
 import { useWebSocket } from './hooks/useWebSocket'
+import {
+  clearCreatedRoomId,
+  getCreatedRoomId,
+  setCreatedRoomId,
+} from './utils/storage'
 
 /**
  * App – top-level component for the Peer Bridge popup.
@@ -16,9 +21,12 @@ export default function App() {
   const [view, setView] = useState('home')
   const [roomId, setRoomId] = useState('')
   const [role, setRole] = useState(null)
+  const [createdRoomId, setCreatedRoomIdState] = useState(() => getCreatedRoomId())
   const { connect, disconnect, sendMessage, messages } = useWebSocket()
 
   function handleCreate(id) {
+    setCreatedRoomId(id)
+    setCreatedRoomIdState(id)
     setRoomId(id)
     setRole('owner')
     connect(id, 'create')
@@ -32,7 +40,16 @@ export default function App() {
     setView('chat')
   }
 
+  function handleOpenCreate() {
+    if (createdRoomId) return
+    setView('create')
+  }
+
   function handleLeave() {
+    if (role === 'owner' && roomId === createdRoomId) {
+      clearCreatedRoomId()
+      setCreatedRoomIdState(null)
+    }
     disconnect()
     setRoomId('')
     setRole(null)
@@ -45,8 +62,10 @@ export default function App() {
 
       {view === 'home' && (
         <HomeSection
-          onCreate={() => setView('create')}
+          onCreate={handleOpenCreate}
           onJoin={() => setView('join')}
+          createBlocked={Boolean(createdRoomId)}
+          createdRoomId={createdRoomId || ''}
         />
       )}
 

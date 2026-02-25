@@ -53,6 +53,12 @@ body {
   color: #8e8ead;
 }
 
+.guard-note {
+  font-size: 11px;
+  color: #ff9fb6;
+  line-height: 1.4;
+}
+
 .home-actions {
   display: flex;
   gap: 8px;
@@ -244,6 +250,12 @@ button:hover {
 
 button:active {
   transform: scale(0.97);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .secondary-btn {

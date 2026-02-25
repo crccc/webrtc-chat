@@ -1,128 +1,154 @@
 /**
- * index.js – Peer Bridge Signaling Server (Phase 1)
+ * index.js – Peer Bridge Signaling Server
  *
  * Responsibilities:
  *   - Accept WebSocket connections from Chrome extension clients.
  *   - Maintain a registry of rooms: { roomId → Set<WebSocket> }
  *   - Route messages between peers that share the same room.
- *
- * Message protocol (see docs/protocol.md):
- *
- *   CLIENT → SERVER  { type: "join",    room: "<roomId>" }
- *   CLIENT → SERVER  { type: "message", room: "<roomId>", text: "<text>" }
- *   SERVER → CLIENT  { type: "joined",  room: "<roomId>", peers: <number> }
- *   SERVER → CLIENT  { type: "message", from: "<peerId>", text: "<text>" }
  */
 
 const { WebSocketServer } = require("ws");
 
-// ── Config ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// ── Room registry ─────────────────────────────────────────────────────────────
-// Map<roomId: string, Set<WebSocket>>
-const rooms = new Map();
+function isUuidV4(value) {
+  return typeof value === "string" && UUID_V4_REGEX.test(value);
+}
 
-// ── Server setup ──────────────────────────────────────────────────────────────
-const wss = new WebSocketServer({ port: PORT });
-console.log(`[peer-bridge] Signaling server listening on ws://localhost:${PORT}`);
+function getJoinValidationError(roomId) {
+  if (!isUuidV4(roomId)) {
+    return "INVALID_ROOM_ID";
+  }
+  return null;
+}
 
-wss.on("connection", (ws) => {
-  // Track which room this connection belongs to
-  ws.roomId = null;
+function createSignalingServer({ port = PORT, enableLog = true } = {}) {
+  // Map<roomId: string, Set<WebSocket>>
+  const rooms = new Map();
+  const wss = new WebSocketServer({ port });
 
-  ws.on("message", (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw);
-    } catch {
-      console.warn("[peer-bridge] Non-JSON message received – ignoring.");
+  if (enableLog) {
+    console.log(`[peer-bridge] Signaling server listening on ws://localhost:${port}`);
+  }
+
+  wss.on("connection", (ws) => {
+    ws.roomId = null;
+
+    ws.on("message", (raw) => {
+      let msg;
+      try {
+        msg = JSON.parse(raw);
+      } catch {
+        console.warn("[peer-bridge] Non-JSON message received – ignoring.");
+        return;
+      }
+
+      switch (msg.type) {
+        case "join":
+          handleJoin(ws, msg.room);
+          break;
+        case "message":
+          handleMessage(ws, msg);
+          break;
+        default:
+          console.warn("[peer-bridge] Unknown message type:", msg.type);
+      }
+    });
+
+    ws.on("close", () => {
+      leaveRoom(ws);
+    });
+  });
+
+  function handleJoin(ws, roomId) {
+    const validationError = getJoinValidationError(roomId);
+    if (validationError) {
+      send(ws, {
+        type: "error",
+        code: validationError,
+        message: "room id must be a UUIDv4",
+      });
       return;
     }
 
-    switch (msg.type) {
-      case "join":
-        handleJoin(ws, msg.room);
-        break;
-
-      case "message":
-        handleMessage(ws, msg);
-        break;
-
-      default:
-        console.warn("[peer-bridge] Unknown message type:", msg.type);
-    }
-  });
-
-  ws.on("close", () => {
+    // Leave any previous room first (reconnect edge-case)
     leaveRoom(ws);
-  });
-});
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, new Set());
+    }
 
-/** Add a client to a room. */
-function handleJoin(ws, roomId) {
-  if (!roomId || typeof roomId !== "string") return;
+    const room = rooms.get(roomId);
+    room.add(ws);
+    ws.roomId = roomId;
 
-  // Leave any previous room first (reconnect edge-case)
-  leaveRoom(ws);
+    if (enableLog) {
+      console.log(`[peer-bridge] Client joined room "${roomId}" (${room.size} peer(s))`);
+    }
 
-  if (!rooms.has(roomId)) {
-    rooms.set(roomId, new Set());
+    send(ws, { type: "joined", room: roomId, peers: room.size });
   }
 
-  const room = rooms.get(roomId);
-  room.add(ws);
-  ws.roomId = roomId;
+  function handleMessage(ws, msg) {
+    const roomId = ws.roomId;
+    if (!roomId || !rooms.has(roomId)) return;
 
-  console.log(`[peer-bridge] Client joined room "${roomId}" (${room.size} peer(s))`);
+    const text = msg.text;
+    if (typeof text !== "string" || !text.trim()) return;
 
-  // Acknowledge the join to the client that just connected
-  send(ws, { type: "joined", room: roomId, peers: room.size });
-}
+    const room = rooms.get(roomId);
+    const payload = JSON.stringify({ type: "message", from: ws.peerId || "peer", text });
 
-/** Broadcast a text message from one peer to all other peers in the room. */
-function handleMessage(ws, msg) {
-  const roomId = ws.roomId;
-  if (!roomId || !rooms.has(roomId)) return;
-
-  const text = msg.text;
-  if (typeof text !== "string" || !text.trim()) return;
-
-  const room = rooms.get(roomId);
-  const payload = JSON.stringify({ type: "message", from: ws.peerId || "peer", text });
-
-  for (const peer of room) {
-    if (peer !== ws && peer.readyState === peer.OPEN) {
-      peer.send(payload);
+    for (const peer of room) {
+      if (peer !== ws && peer.readyState === peer.OPEN) {
+        peer.send(payload);
+      }
     }
   }
-}
 
-/** Remove a client from its current room and clean up empty rooms. */
-function leaveRoom(ws) {
-  const roomId = ws.roomId;
-  if (!roomId || !rooms.has(roomId)) return;
+  function leaveRoom(ws) {
+    const roomId = ws.roomId;
+    if (!roomId || !rooms.has(roomId)) return;
 
-  const room = rooms.get(roomId);
-  room.delete(ws);
+    const room = rooms.get(roomId);
+    room.delete(ws);
 
-  console.log(`[peer-bridge] Client left room "${roomId}" (${room.size} peer(s) remaining)`);
+    if (enableLog) {
+      console.log(`[peer-bridge] Client left room "${roomId}" (${room.size} peer(s) remaining)`);
+    }
 
-  if (room.size === 0) {
-    rooms.delete(roomId);
-    console.log(`[peer-bridge] Room "${roomId}" removed (empty).`);
+    if (room.size === 0) {
+      rooms.delete(roomId);
+      if (enableLog) {
+        console.log(`[peer-bridge] Room "${roomId}" removed (empty).`);
+      }
+    }
+
+    ws.roomId = null;
   }
 
-  ws.roomId = null;
-}
-
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-/** Safely send a JSON payload to a single client. */
-function send(ws, payload) {
-  if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify(payload));
+  function close() {
+    return new Promise((resolve, reject) => {
+      wss.close((err) => (err ? reject(err) : resolve()));
+    });
   }
+
+  function send(ws, payload) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
+  }
+
+  return { wss, rooms, close };
 }
+
+if (require.main === module) {
+  createSignalingServer({ port: PORT });
+}
+
+module.exports = {
+  createSignalingServer,
+  getJoinValidationError,
+  isUuidV4,
+};
