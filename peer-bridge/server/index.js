@@ -8,6 +8,7 @@
  */
 
 const { WebSocketServer } = require("ws");
+const { randomUUID } = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 const MAX_ROOM_CAPACITY = 10;
@@ -22,6 +23,7 @@ const ERROR_MESSAGES = {
   DUPLICATE_USERNAME: "username already taken in this room",
   ROOM_FULL: "room is full (10/10)",
   ROOM_CLOSED: "owner closed the room",
+  UNSUPPORTED_ACTION: "unsupported action",
 };
 
 function isUuidV4(value) {
@@ -62,7 +64,7 @@ function getJoinValidationError(payload, room) {
 }
 
 function createSignalingServer({ port = PORT, enableLog = true } = {}) {
-  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string>, owner: WebSocket }>
+  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string>, owner: WebSocket, peersById: Map<string, WebSocket> }>
   const rooms = new Map();
   const wss = new WebSocketServer({ port });
 
@@ -73,6 +75,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
   wss.on("connection", (ws) => {
     ws.roomId = null;
     ws.username = null;
+    ws.peerId = null;
     ws.isOwner = false;
 
     ws.on("message", (raw) => {
@@ -84,15 +87,25 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         return;
       }
 
-      switch (msg.type) {
+      const action = typeof msg?.action === "string" ? msg.action : msg?.type;
+      switch (action) {
         case "join":
           handleJoin(ws, msg);
           break;
-        case "message":
-          handleMessage(ws, msg);
+        case "offer":
+        case "answer":
+        case "ice":
+          // Placeholder handlers; relay behavior is implemented in Task 02.
           break;
         default:
-          console.warn("[peer-bridge] Unknown message type:", msg.type);
+          send(ws, {
+            type: "error",
+            code: "UNSUPPORTED_ACTION",
+            message: ERROR_MESSAGES.UNSUPPORTED_ACTION,
+          });
+          if (enableLog) {
+            console.warn("[peer-bridge] Unsupported action:", action);
+          }
       }
     });
 
@@ -125,14 +138,18 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         peers: new Set(),
         usernames: new Set(),
         owner: ws,
+        peersById: new Map(),
       };
       rooms.set(payload.roomId, targetRoom);
     }
 
+    const peerId = generatePeerId(targetRoom);
     targetRoom.peers.add(ws);
     targetRoom.usernames.add(payload.username);
+    targetRoom.peersById.set(peerId, ws);
     ws.roomId = payload.roomId;
     ws.username = payload.username;
+    ws.peerId = peerId;
     ws.isOwner = targetRoom.owner === ws;
 
     if (enableLog) {
@@ -144,33 +161,14 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     send(ws, {
       type: "joined",
       room: payload.roomId,
+      peerId,
+      peerList: Array.from(targetRoom.peersById.keys()).filter((id) => id !== peerId),
       peers: targetRoom.peers.size,
       capacity: MAX_ROOM_CAPACITY,
       username: payload.username,
     });
 
     broadcastPresence(targetRoom);
-  }
-
-  function handleMessage(ws, msg) {
-    const roomId = ws.roomId;
-    if (!roomId || !rooms.has(roomId)) return;
-
-    const text = msg.text;
-    if (typeof text !== "string" || !text.trim()) return;
-
-    const room = rooms.get(roomId);
-    const payload = JSON.stringify({
-      type: "message",
-      from: ws.username || ws.peerId || "peer",
-      text,
-    });
-
-    for (const peer of room.peers) {
-      if (peer !== ws && peer.readyState === peer.OPEN) {
-        peer.send(payload);
-      }
-    }
   }
 
   function leaveRoom(ws) {
@@ -192,8 +190,12 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         if (peer.username) {
           room.usernames.delete(peer.username);
         }
+        if (peer.peerId) {
+          room.peersById.delete(peer.peerId);
+        }
         peer.roomId = null;
         peer.username = null;
+        peer.peerId = null;
         peer.isOwner = false;
         peer.close(4001, "ROOM_CLOSED");
       }
@@ -201,6 +203,9 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
       room.peers.delete(ws);
       if (ws.username) {
         room.usernames.delete(ws.username);
+      }
+      if (ws.peerId) {
+        room.peersById.delete(ws.peerId);
       }
       rooms.delete(roomId);
 
@@ -210,6 +215,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
       ws.roomId = null;
       ws.username = null;
+      ws.peerId = null;
       ws.isOwner = false;
       return;
     }
@@ -218,6 +224,9 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
     if (ws.username) {
       room.usernames.delete(ws.username);
+    }
+    if (ws.peerId) {
+      room.peersById.delete(ws.peerId);
     }
 
     if (enableLog) {
@@ -237,6 +246,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
     ws.roomId = null;
     ws.username = null;
+    ws.peerId = null;
     ws.isOwner = false;
   }
 
@@ -256,6 +266,14 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     return new Promise((resolve, reject) => {
       wss.close((err) => (err ? reject(err) : resolve()));
     });
+  }
+
+  function generatePeerId(room) {
+    let peerId = randomUUID();
+    while (room.peersById.has(peerId)) {
+      peerId = randomUUID();
+    }
+    return peerId;
   }
 
   function send(ws, payload) {
