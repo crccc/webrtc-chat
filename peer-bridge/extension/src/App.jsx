@@ -21,28 +21,50 @@ export default function App() {
   const [view, setView] = useState('home')
   const [roomId, setRoomId] = useState('')
   const [role, setRole] = useState(null)
+  const [createError, setCreateError] = useState('')
+  const [joinError, setJoinError] = useState('')
   const [createdRoomId, setCreatedRoomIdState] = useState(() => getCreatedRoomId())
-  const { connect, disconnect, sendMessage, messages } = useWebSocket()
+  const { connect, disconnect, sendMessage, messages, peers, capacity } = useWebSocket()
 
-  function handleCreate(id) {
-    setCreatedRoomId(id)
-    setCreatedRoomIdState(id)
-    setRoomId(id)
+  async function handleCreate(payload) {
+    setCreateError('')
+
+    const result = await connect({ ...payload, flow: 'create' })
+    if (!result.ok) {
+      setCreateError(result.message)
+      return
+    }
+
+    setCreatedRoomId(payload.roomId)
+    setCreatedRoomIdState(payload.roomId)
+    setRoomId(payload.roomId)
     setRole('owner')
-    connect(id, 'create')
     setView('chat')
   }
 
-  function handleJoin(id) {
-    setRoomId(id)
+  async function handleJoin(payload) {
+    setJoinError('')
+
+    const result = await connect({ ...payload, flow: 'join' })
+    if (!result.ok) {
+      setJoinError(result.message)
+      return
+    }
+
+    setRoomId(payload.roomId)
     setRole('participant')
-    connect(id, 'join')
     setView('chat')
   }
 
   function handleOpenCreate() {
     if (createdRoomId) return
+    setCreateError('')
     setView('create')
+  }
+
+  function handleOpenJoin() {
+    setJoinError('')
+    setView('join')
   }
 
   function handleLeave() {
@@ -50,6 +72,7 @@ export default function App() {
       clearCreatedRoomId()
       setCreatedRoomIdState(null)
     }
+
     disconnect()
     setRoomId('')
     setRole(null)
@@ -63,24 +86,34 @@ export default function App() {
       {view === 'home' && (
         <HomeSection
           onCreate={handleOpenCreate}
-          onJoin={() => setView('join')}
+          onJoin={handleOpenJoin}
           createBlocked={Boolean(createdRoomId)}
           createdRoomId={createdRoomId || ''}
         />
       )}
 
       {view === 'create' && (
-        <CreateRoomSection onCreate={handleCreate} onBack={() => setView('home')} />
+        <CreateRoomSection
+          onCreate={handleCreate}
+          onBack={() => setView('home')}
+          errorMessage={createError}
+        />
       )}
 
       {view === 'join' && (
-        <JoinSection onJoin={handleJoin} onBack={() => setView('home')} />
+        <JoinSection
+          onJoin={handleJoin}
+          onBack={() => setView('home')}
+          errorMessage={joinError}
+        />
       )}
 
       {view === 'chat' && (
         <ChatSection
           roomId={roomId}
           role={role}
+          peers={peers}
+          capacity={capacity}
           messages={messages}
           onSend={sendMessage}
           onLeave={handleLeave}

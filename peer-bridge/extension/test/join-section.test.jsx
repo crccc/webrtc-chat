@@ -8,36 +8,38 @@ afterEach(() => {
   cleanup();
 });
 
-describe("JoinSection", () => {
-  it("submits trimmed room id on join", async () => {
+describe("JoinSection phase-3", () => {
+  it("submits trimmed credentials on join", async () => {
     const onJoin = vi.fn();
     const user = userEvent.setup();
     render(<JoinSection onJoin={onJoin} onBack={() => {}} />);
 
     await user.type(screen.getByLabelText("Room ID"), "  room-b  ");
+    await user.type(screen.getByLabelText("Username"), "  alice  ");
+    await user.type(screen.getByLabelText("Passcode"), "  secret123  ");
     await user.click(screen.getByText("Join Room"));
 
-    expect(onJoin).toHaveBeenCalledWith("room-b");
+    expect(onJoin).toHaveBeenCalledWith({
+      roomId: "room-b",
+      username: "alice",
+      passcode: "secret123",
+    });
   });
 
-  it("submits on Enter", async () => {
+  it("requires username and passcode format", async () => {
     const onJoin = vi.fn();
     const user = userEvent.setup();
     render(<JoinSection onJoin={onJoin} onBack={() => {}} />);
 
-    const input = screen.getByLabelText("Room ID");
-    await user.type(input, "room-enter{Enter}");
+    await user.type(screen.getByLabelText("Room ID"), "room-a");
+    await user.click(screen.getByText("Join Room"));
+    expect(screen.getByText("Username is required.")).toBeDefined();
 
-    expect(onJoin).toHaveBeenCalledWith("room-enter");
-  });
-
-  it("does not submit empty room id", async () => {
-    const onJoin = vi.fn();
-    const user = userEvent.setup();
-    render(<JoinSection onJoin={onJoin} onBack={() => {}} />);
-
+    await user.type(screen.getByLabelText("Username"), "alice");
+    await user.type(screen.getByLabelText("Passcode"), "12345");
     await user.click(screen.getByText("Join Room"));
 
+    expect(screen.getByText("Passcode must be 6-32 characters.")).toBeDefined();
     expect(onJoin).not.toHaveBeenCalled();
   });
 

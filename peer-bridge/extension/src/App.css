@@ -123,6 +123,18 @@ body {
   letter-spacing: 0.05em;
 }
 
+.capacity-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #3d4f2f;
+  background: #1a2712;
+  color: #b2dd92;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+
 .leave-btn {
   padding: 2px 7px;
   font-size: 11px;
@@ -272,4 +284,10 @@ button:disabled {
 
 .input-row input {
   flex: 1;
+}
+
+.form-error {
+  font-size: 11px;
+  color: #ff9fb6;
+  line-height: 1.4;
 }

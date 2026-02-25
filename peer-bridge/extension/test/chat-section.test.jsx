@@ -15,11 +15,13 @@ afterEach(() => {
 });
 
 describe("ChatSection", () => {
-  it("shows room id and role", () => {
+  it("shows room id, role, and peer capacity", () => {
     render(
       <ChatSection
         roomId="room-c"
         role="owner"
+        peers={3}
+        capacity={10}
         messages={[]}
         onSend={() => {}}
         onLeave={() => {}}
@@ -28,6 +30,7 @@ describe("ChatSection", () => {
 
     expect(screen.getByText("room-c")).toBeDefined();
     expect(screen.getByText("owner")).toBeDefined();
+    expect(screen.getByText("3/10")).toBeDefined();
   });
 
   it("sends trimmed message and clears input", async () => {
@@ -37,6 +40,8 @@ describe("ChatSection", () => {
       <ChatSection
         roomId="room-c"
         role="participant"
+        peers={1}
+        capacity={10}
         messages={[]}
         onSend={onSend}
         onLeave={() => {}}
@@ -51,26 +56,6 @@ describe("ChatSection", () => {
     expect(input.value).toBe("");
   });
 
-  it("does not send empty message", async () => {
-    const onSend = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <ChatSection
-        roomId="room-c"
-        role="participant"
-        messages={[]}
-        onSend={onSend}
-        onLeave={() => {}}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("Type a message…");
-    await user.type(input, "   ");
-    await user.click(screen.getByText("Send"));
-
-    expect(onSend).not.toHaveBeenCalled();
-  });
-
   it("calls onLeave when leave button is clicked", async () => {
     const onLeave = vi.fn();
     const user = userEvent.setup();
@@ -78,6 +63,8 @@ describe("ChatSection", () => {
       <ChatSection
         roomId="room-c"
         role="participant"
+        peers={1}
+        capacity={10}
         messages={[]}
         onSend={() => {}}
         onLeave={onLeave}

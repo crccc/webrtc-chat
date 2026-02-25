@@ -2,14 +2,39 @@ import { useState } from 'react'
 import { generateUuidV4 } from '../utils/uuid'
 
 /**
- * CreateRoomSection – auto-generates a room id and lets the user create a room.
- * Calls onCreate(roomId) when submitted.
+ * CreateRoomSection – auto-generates room id and collects username/passcode.
+ * Calls onCreate({ roomId, username, passcode }) when submitted.
  */
-export default function CreateRoomSection({ onCreate, onBack }) {
+export default function CreateRoomSection({ onCreate, onBack, errorMessage = '' }) {
   const [roomId, setRoomId] = useState(() => generateUuidV4())
+  const [username, setUsername] = useState('')
+  const [passcode, setPasscode] = useState('')
+  const [localError, setLocalError] = useState('')
+
+  function validate() {
+    const trimmedUsername = username.trim()
+    const trimmedPasscode = passcode.trim()
+
+    if (!trimmedUsername) return 'Username is required.'
+    if (trimmedPasscode.length < 6 || trimmedPasscode.length > 32) {
+      return 'Passcode must be 6-32 characters.'
+    }
+    return ''
+  }
 
   function handleCreate() {
-    onCreate(roomId)
+    const validationError = validate()
+    if (validationError) {
+      setLocalError(validationError)
+      return
+    }
+
+    setLocalError('')
+    onCreate({
+      roomId,
+      username: username.trim(),
+      passcode: passcode.trim(),
+    })
   }
 
   function handleRegenerate() {
@@ -19,6 +44,8 @@ export default function CreateRoomSection({ onCreate, onBack }) {
   function handleKeyDown(e) {
     if (e.key === 'Enter') handleCreate()
   }
+
+  const visibleError = localError || errorMessage
 
   return (
     <section className="join-section">
@@ -31,6 +58,35 @@ export default function CreateRoomSection({ onCreate, onBack }) {
         readOnly
         autoFocus
       />
+
+      <label htmlFor="create-username-input">Username</label>
+      <input
+        id="create-username-input"
+        type="text"
+        value={username}
+        onChange={(e) => {
+          setUsername(e.target.value)
+          if (localError) setLocalError('')
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder="e.g. alice"
+      />
+
+      <label htmlFor="create-passcode-input">Passcode</label>
+      <input
+        id="create-passcode-input"
+        type="text"
+        value={passcode}
+        onChange={(e) => {
+          setPasscode(e.target.value)
+          if (localError) setLocalError('')
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder="6-32 characters"
+      />
+
+      {visibleError && <p className="form-error">{visibleError}</p>}
+
       <div className="section-actions">
         <button className="secondary-btn" onClick={onBack}>
           Back

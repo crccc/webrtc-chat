@@ -16,6 +16,8 @@ vi.mock("../src/hooks/useWebSocket", () => ({
     sendMessage,
     messages: [],
     status: "idle",
+    peers: 1,
+    capacity: 10,
   }),
 }));
 
@@ -42,13 +44,14 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   createdRoomIdStore = null;
+  connect.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe("App phase-2 flow", () => {
+describe("App phase-3 flow", () => {
   it("shows Home screen by default", () => {
     render(<App />);
 
@@ -56,33 +59,45 @@ describe("App phase-2 flow", () => {
     expect(screen.getByText("Join Room")).toBeDefined();
   });
 
-  it("handles Create flow with generated room id and owner role", async () => {
+  it("handles Create flow and enters chat as owner", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByText("Create Room"));
+    await user.type(screen.getByLabelText("Username"), "owner-a");
+    await user.type(screen.getByLabelText("Passcode"), "secret123");
     await user.click(screen.getByText("Create Room"));
 
-    expect(connect).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "create");
+    expect(connect).toHaveBeenCalledWith({
+      flow: "create",
+      roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      username: "owner-a",
+      passcode: "secret123",
+    });
     expect(screen.getByText("owner")).toBeDefined();
     expect(createdRoomIdStore).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 
     await user.click(screen.getByTitle("Leave room"));
     expect(disconnect).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Join Room")).toBeDefined();
     expect(createdRoomIdStore).toBeNull();
   });
 
-  it("handles Join flow and shows participant role", async () => {
+  it("shows ROOM_FULL error in join flow", async () => {
     const user = userEvent.setup();
+    connect.mockResolvedValue({ ok: false, code: "ROOM_FULL", message: "Room is full (10/10)." });
     render(<App />);
 
     await user.click(screen.getByText("Join Room"));
-    await user.type(screen.getByLabelText("Room ID"), "room-participant");
+    await user.type(
+      screen.getByLabelText("Room ID"),
+      "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    );
+    await user.type(screen.getByLabelText("Username"), "alice");
+    await user.type(screen.getByLabelText("Passcode"), "secret123");
     await user.click(screen.getByText("Join Room"));
 
-    expect(connect).toHaveBeenCalledWith("room-participant", "join");
-    expect(screen.getByText("participant")).toBeDefined();
+    expect(screen.getByText("Room is full (10/10).")).toBeDefined();
+    expect(screen.queryByText("participant")).toBeNull();
   });
 
   it("blocks Create when an active created room exists locally", async () => {

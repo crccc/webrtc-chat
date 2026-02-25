@@ -3,28 +3,65 @@
  *
  * Responsibilities:
  *   - Accept WebSocket connections from Chrome extension clients.
- *   - Maintain a registry of rooms: { roomId → Set<WebSocket> }
+ *   - Maintain a registry of rooms.
  *   - Route messages between peers that share the same room.
  */
 
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
+const MAX_ROOM_CAPACITY = 10;
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const ERROR_MESSAGES = {
+  INVALID_ROOM_ID: "room id must be a UUIDv4",
+  INVALID_USERNAME: "username is required",
+  INVALID_PASSCODE_FORMAT: "passcode must be 6-32 characters",
+  ROOM_NOT_FOUND: "room does not exist",
+  INVALID_PASSCODE: "incorrect passcode",
+  DUPLICATE_USERNAME: "username already taken in this room",
+  ROOM_FULL: "room is full (10/10)",
+};
 
 function isUuidV4(value) {
   return typeof value === "string" && UUID_V4_REGEX.test(value);
 }
 
-function getJoinValidationError(roomId) {
-  if (!isUuidV4(roomId)) {
-    return "INVALID_ROOM_ID";
+function isValidUsername(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidPasscode(value) {
+  return typeof value === "string" && value.length >= 6 && value.length <= 32;
+}
+
+function normalizeJoinPayload(msg) {
+  return {
+    flow: msg?.flow === "create" ? "create" : "join",
+    roomId: typeof msg?.room === "string" ? msg.room.trim() : "",
+    username: typeof msg?.username === "string" ? msg.username.trim() : "",
+    passcode: typeof msg?.passcode === "string" ? msg.passcode.trim() : "",
+  };
+}
+
+function getJoinValidationError(payload, room) {
+  if (!isUuidV4(payload.roomId)) return "INVALID_ROOM_ID";
+  if (!isValidUsername(payload.username)) return "INVALID_USERNAME";
+  if (!isValidPasscode(payload.passcode)) return "INVALID_PASSCODE_FORMAT";
+
+  if (!room) {
+    if (payload.flow !== "create") return "ROOM_NOT_FOUND";
+    return null;
   }
+
+  if (room.passcode !== payload.passcode) return "INVALID_PASSCODE";
+  if (room.usernames.has(payload.username)) return "DUPLICATE_USERNAME";
+  if (room.peers.size >= MAX_ROOM_CAPACITY) return "ROOM_FULL";
   return null;
 }
 
 function createSignalingServer({ port = PORT, enableLog = true } = {}) {
-  // Map<roomId: string, Set<WebSocket>>
+  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string> }>
   const rooms = new Map();
   const wss = new WebSocketServer({ port });
 
@@ -34,6 +71,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
   wss.on("connection", (ws) => {
     ws.roomId = null;
+    ws.username = null;
 
     ws.on("message", (raw) => {
       let msg;
@@ -46,7 +84,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
       switch (msg.type) {
         case "join":
-          handleJoin(ws, msg.room);
+          handleJoin(ws, msg);
           break;
         case "message":
           handleMessage(ws, msg);
@@ -61,33 +99,53 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     });
   });
 
-  function handleJoin(ws, roomId) {
-    const validationError = getJoinValidationError(roomId);
-    if (validationError) {
-      send(ws, {
-        type: "error",
-        code: validationError,
-        message: "room id must be a UUIDv4",
-      });
-      return;
-    }
+  function handleJoin(ws, msg) {
+    const payload = normalizeJoinPayload(msg);
 
     // Leave any previous room first (reconnect edge-case)
     leaveRoom(ws);
 
-    if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Set());
+    const room = rooms.get(payload.roomId);
+    const validationError = getJoinValidationError(payload, room);
+    if (validationError) {
+      send(ws, {
+        type: "error",
+        code: validationError,
+        message: ERROR_MESSAGES[validationError],
+      });
+      return;
     }
 
-    const room = rooms.get(roomId);
-    room.add(ws);
-    ws.roomId = roomId;
+    let targetRoom = room;
+    if (!targetRoom) {
+      targetRoom = {
+        passcode: payload.passcode,
+        peers: new Set(),
+        usernames: new Set(),
+      };
+      rooms.set(payload.roomId, targetRoom);
+    }
+
+    targetRoom.peers.add(ws);
+    targetRoom.usernames.add(payload.username);
+    ws.roomId = payload.roomId;
+    ws.username = payload.username;
 
     if (enableLog) {
-      console.log(`[peer-bridge] Client joined room "${roomId}" (${room.size} peer(s))`);
+      console.log(
+        `[peer-bridge] ${payload.username} joined room "${payload.roomId}" (${targetRoom.peers.size}/${MAX_ROOM_CAPACITY})`,
+      );
     }
 
-    send(ws, { type: "joined", room: roomId, peers: room.size });
+    send(ws, {
+      type: "joined",
+      room: payload.roomId,
+      peers: targetRoom.peers.size,
+      capacity: MAX_ROOM_CAPACITY,
+      username: payload.username,
+    });
+
+    broadcastPresence(targetRoom);
   }
 
   function handleMessage(ws, msg) {
@@ -98,9 +156,13 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     if (typeof text !== "string" || !text.trim()) return;
 
     const room = rooms.get(roomId);
-    const payload = JSON.stringify({ type: "message", from: ws.peerId || "peer", text });
+    const payload = JSON.stringify({
+      type: "message",
+      from: ws.username || ws.peerId || "peer",
+      text,
+    });
 
-    for (const peer of room) {
+    for (const peer of room.peers) {
       if (peer !== ws && peer.readyState === peer.OPEN) {
         peer.send(payload);
       }
@@ -112,20 +174,41 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     if (!roomId || !rooms.has(roomId)) return;
 
     const room = rooms.get(roomId);
-    room.delete(ws);
+    room.peers.delete(ws);
 
-    if (enableLog) {
-      console.log(`[peer-bridge] Client left room "${roomId}" (${room.size} peer(s) remaining)`);
+    if (ws.username) {
+      room.usernames.delete(ws.username);
     }
 
-    if (room.size === 0) {
+    if (enableLog) {
+      console.log(
+        `[peer-bridge] ${ws.username || "client"} left room "${roomId}" (${room.peers.size} peer(s) remaining)`,
+      );
+    }
+
+    if (room.peers.size === 0) {
       rooms.delete(roomId);
       if (enableLog) {
         console.log(`[peer-bridge] Room "${roomId}" removed (empty).`);
       }
+    } else {
+      broadcastPresence(room);
     }
 
     ws.roomId = null;
+    ws.username = null;
+  }
+
+  function broadcastPresence(room) {
+    const payload = {
+      type: "presence",
+      peers: room.peers.size,
+      capacity: MAX_ROOM_CAPACITY,
+    };
+
+    for (const peer of room.peers) {
+      send(peer, payload);
+    }
   }
 
   function close() {
@@ -148,7 +231,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MAX_ROOM_CAPACITY,
+  ERROR_MESSAGES,
   createSignalingServer,
   getJoinValidationError,
   isUuidV4,
+  isValidPasscode,
+  isValidUsername,
+  normalizeJoinPayload,
 };

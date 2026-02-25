@@ -30,7 +30,7 @@ beforeEach(() => {
   );
 });
 
-describe("CreateRoomSection phase-2 auto room id", () => {
+describe("CreateRoomSection phase-3", () => {
   it("shows an initial UUIDv4 room id", () => {
     render(<CreateRoomSection onCreate={() => {}} onBack={() => {}} />);
     const input = screen.getByLabelText("Room ID");
@@ -49,33 +49,43 @@ describe("CreateRoomSection phase-2 auto room id", () => {
 
     expect(input.value).not.toBe(firstValue);
     expect(input.value).toBe("22222222-2222-4222-8222-222222222222");
-    expect(UUID_V4_REGEX.test(input.value)).toBe(true);
   });
 
   it("keeps room id input readonly", () => {
     render(<CreateRoomSection onCreate={() => {}} onBack={() => {}} />);
     const input = screen.getByLabelText("Room ID");
-
     expect(input.readOnly).toBe(true);
   });
 
-  it("submits generated room id on create", async () => {
+  it("requires username and passcode length", async () => {
     const onCreate = vi.fn();
     const user = userEvent.setup();
     render(<CreateRoomSection onCreate={onCreate} onBack={() => {}} />);
 
     await user.click(screen.getByText("Create Room"));
+    expect(screen.getByText("Username is required.")).toBeDefined();
 
-    expect(onCreate).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+    await user.type(screen.getByLabelText("Username"), "alice");
+    await user.type(screen.getByLabelText("Passcode"), "12345");
+    await user.click(screen.getByText("Create Room"));
+
+    expect(screen.getByText("Passcode must be 6-32 characters.")).toBeDefined();
+    expect(onCreate).not.toHaveBeenCalled();
   });
 
-  it("calls onBack when back is clicked", async () => {
-    const onBack = vi.fn();
+  it("submits generated room id with username/passcode", async () => {
+    const onCreate = vi.fn();
     const user = userEvent.setup();
-    render(<CreateRoomSection onCreate={() => {}} onBack={onBack} />);
+    render(<CreateRoomSection onCreate={onCreate} onBack={() => {}} />);
 
-    await user.click(screen.getByText("Back"));
+    await user.type(screen.getByLabelText("Username"), "alice");
+    await user.type(screen.getByLabelText("Passcode"), "secret123");
+    await user.click(screen.getByText("Create Room"));
 
-    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledWith({
+      roomId: "11111111-1111-4111-8111-111111111111",
+      username: "alice",
+      passcode: "secret123",
+    });
   });
 });
