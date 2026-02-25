@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import './App.css'
+import HomeSection from './components/HomeSection'
+import CreateRoomSection from './components/CreateRoomSection'
 import JoinSection from './components/JoinSection'
 import ChatSection from './components/ChatSection'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -8,37 +10,58 @@ import { useWebSocket } from './hooks/useWebSocket'
  * App – top-level component for the Peer Bridge popup.
  *
  * State machine:
- *   view === 'join'  → show JoinSection
- *   view === 'chat'  → show ChatSection
+ *   home -> create|join -> chat
  */
 export default function App() {
-  const [view, setView] = useState('join')
+  const [view, setView] = useState('home')
   const [roomId, setRoomId] = useState('')
+  const [role, setRole] = useState(null)
   const { connect, disconnect, sendMessage, messages } = useWebSocket()
+
+  function handleCreate(id) {
+    setRoomId(id)
+    setRole('owner')
+    connect(id, 'create')
+    setView('chat')
+  }
 
   function handleJoin(id) {
     setRoomId(id)
-    connect(id)
+    setRole('participant')
+    connect(id, 'join')
     setView('chat')
   }
 
   function handleLeave() {
     disconnect()
     setRoomId('')
-    setView('join')
+    setRole(null)
+    setView('home')
   }
-
-  console.log('App state:', { view, roomId, messages })
 
   return (
     <div className="popup-root">
       <h1 className="app-title">Peer Bridge</h1>
 
-      {view === 'join' ? (
-        <JoinSection onJoin={handleJoin} />
-      ) : (
+      {view === 'home' && (
+        <HomeSection
+          onCreate={() => setView('create')}
+          onJoin={() => setView('join')}
+        />
+      )}
+
+      {view === 'create' && (
+        <CreateRoomSection onCreate={handleCreate} onBack={() => setView('home')} />
+      )}
+
+      {view === 'join' && (
+        <JoinSection onJoin={handleJoin} onBack={() => setView('home')} />
+      )}
+
+      {view === 'chat' && (
         <ChatSection
           roomId={roomId}
+          role={role}
           messages={messages}
           onSend={sendMessage}
           onLeave={handleLeave}

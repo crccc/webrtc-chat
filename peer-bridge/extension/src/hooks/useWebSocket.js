@@ -6,7 +6,7 @@ const SERVER_URL = 'ws://localhost:3000'
  * useWebSocket – manages the WebSocket lifecycle for a Peer Bridge room.
  *
  * Returns:
- *   connect(roomId)   – open a socket and join the room
+ *   connect(roomId, flow) – open a socket and enter the room
  *   disconnect()      – close the socket
  *   sendMessage(text) – broadcast a text message to peers
  *   messages          – array of { id, type, text } objects
@@ -26,7 +26,7 @@ export function useWebSocket() {
   }, [])
 
   const connect = useCallback(
-    (roomId) => {
+    (roomId, flow = 'join') => {
       if (socketRef.current) {
         socketRef.current.close()
       }
@@ -39,8 +39,12 @@ export function useWebSocket() {
       socketRef.current = ws
 
       ws.addEventListener('open', () => {
+        // Server still supports join-only semantics; create/join is a UI split.
         ws.send(JSON.stringify({ type: 'join', room: roomId }))
         setStatus('connected')
+        if (flow === 'create') {
+          addMessage(`✓ Created room "${roomId}".`, 'info')
+        }
       })
 
       ws.addEventListener('message', (event) => {

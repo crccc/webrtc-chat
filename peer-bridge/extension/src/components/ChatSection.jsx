@@ -5,11 +5,12 @@ import { useState, useEffect, useRef } from 'react'
  *
  * Props:
  *   roomId      – the current room name
+ *   role        – owner | participant
  *   messages    – [{ id, type, text }]
  *   onSend(text) – called when the user sends a message
  *   onLeave()   – called when the user clicks Leave
  */
-export default function ChatSection({ roomId, messages, onSend, onLeave }) {
+export default function ChatSection({ roomId, role, messages, onSend, onLeave }) {
   const [draft, setDraft] = useState('')
   const messagesEndRef = useRef(null)
 
@@ -32,7 +33,10 @@ export default function ChatSection({ roomId, messages, onSend, onLeave }) {
   return (
     <section className="chat-section">
       <div className="status-bar">
-        Connected to: <span className="room-name">{roomId}</span>
+        <div>
+          Connected to: <span className="room-name">{roomId}</span>
+          <span className="role-badge">{role}</span>
+        </div>
         <button className="leave-btn" onClick={onLeave} title="Leave room">
           ✕
         </button>

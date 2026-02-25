@@ -40,6 +40,24 @@ body {
   background-clip: text;
 }
 
+/* ── Home section ───────────────────────────────────────────────────── */
+
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-subtitle {
+  font-size: 12px;
+  color: #8e8ead;
+}
+
+.home-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ── Join section ───────────────────────────────────────────────────── */
 
 .join-section {
@@ -54,6 +72,11 @@ body {
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.07em;
+}
+
+.section-actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* ── Chat section ───────────────────────────────────────────────────── */
@@ -80,6 +103,18 @@ body {
   color: #7b9cff;
   font-weight: 600;
   margin-left: 4px;
+}
+
+.role-badge {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #2f3e66;
+  background: #111a33;
+  color: #9fc0ff;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .leave-btn {
@@ -209,6 +244,11 @@ button:hover {
 
 button:active {
   transform: scale(0.97);
+}
+
+.secondary-btn {
+  background: #252540;
+  color: #d2d2ee;
 }
 
 /* ── Send row ───────────────────────────────────────────────────────── */

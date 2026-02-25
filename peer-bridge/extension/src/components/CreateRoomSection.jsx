@@ -1,31 +1,31 @@
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 
 /**
- * JoinSection – lets the user enter a room ID and click Join Room.
- * Calls onJoin(roomId) when submitted.
+ * CreateRoomSection – lets the user define a room id and create a room.
+ * Calls onCreate(roomId) when submitted.
  */
-export default function JoinSection({ onJoin, onBack }) {
+export default function CreateRoomSection({ onCreate, onBack }) {
   const [roomId, setRoomId] = useState('')
   const inputRef = useRef(null)
 
-  function handleJoin() {
+  function handleCreate() {
     const trimmed = roomId.trim()
     if (!trimmed) {
       inputRef.current?.focus()
       return
     }
-    onJoin(trimmed)
+    onCreate(trimmed)
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter') handleJoin()
+    if (e.key === 'Enter') handleCreate()
   }
 
   return (
     <section className="join-section">
-      <label htmlFor="room-input">Room ID</label>
+      <label htmlFor="create-room-input">Room ID</label>
       <input
-        id="room-input"
+        id="create-room-input"
         ref={inputRef}
         type="text"
         value={roomId}
@@ -38,7 +38,7 @@ export default function JoinSection({ onJoin, onBack }) {
         <button className="secondary-btn" onClick={onBack}>
           Back
         </button>
-        <button onClick={handleJoin}>Join Room</button>
+        <button onClick={handleCreate}>Create Room</button>
       </div>
     </section>
   )
