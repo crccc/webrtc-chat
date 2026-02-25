@@ -4,10 +4,15 @@
   "description": "Peer Bridge – WebSocket signaling server (Phase 1)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   },
   "license": "MIT"
 }
