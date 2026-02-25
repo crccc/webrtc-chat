@@ -5,8 +5,13 @@ import { generateUuidV4 } from '../utils/uuid'
  * CreateRoomSection – auto-generates room id and collects username/passcode.
  * Calls onCreate({ roomId, username, passcode }) when submitted.
  */
-export default function CreateRoomSection({ onCreate, onBack, errorMessage = '' }) {
-  const [roomId, setRoomId] = useState(() => generateUuidV4())
+export default function CreateRoomSection({
+  onCreate,
+  onBack,
+  errorMessage = '',
+  initialRoomId = '',
+}) {
+  const [roomId, setRoomId] = useState(() => initialRoomId || generateUuidV4())
   const [username, setUsername] = useState('')
   const [passcode, setPasscode] = useState('')
   const [localError, setLocalError] = useState('')

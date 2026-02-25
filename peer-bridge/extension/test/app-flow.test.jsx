@@ -100,15 +100,45 @@ describe("App phase-3 flow", () => {
     expect(screen.queryByText("participant")).toBeNull();
   });
 
-  it("blocks Create when an active created room exists locally", async () => {
-    const user = userEvent.setup();
+  it("restores create state when existing created-room id is found", () => {
     createdRoomIdStore = "99999999-9999-4999-8999-999999999999";
     render(<App />);
 
-    expect(screen.getByText(/Active created room detected/i)).toBeDefined();
-    expect(screen.getByText("Create Room").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Regenerate")).toBeDefined();
+    expect(screen.getByLabelText("Room ID").value).toBe(
+      "99999999-9999-4999-8999-999999999999",
+    );
+  });
 
-    await user.click(screen.getByText("Join Room"));
-    expect(screen.getByText("Back")).toBeDefined();
+  it("auto leaves room when popup unmounts", async () => {
+    const user = userEvent.setup();
+    const view = render(<App />);
+
+    await user.click(screen.getByText("Create Room"));
+    await user.type(screen.getByLabelText("Username"), "owner-a");
+    await user.type(screen.getByLabelText("Passcode"), "secret123");
+    await user.click(screen.getByText("Create Room"));
+
+    expect(createdRoomIdStore).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+    view.unmount();
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(createdRoomIdStore).toBeNull();
+  });
+
+  it("auto leaves room when side panel pagehide fires", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByText("Create Room"));
+    await user.type(screen.getByLabelText("Username"), "owner-a");
+    await user.type(screen.getByLabelText("Passcode"), "secret123");
+    await user.click(screen.getByText("Create Room"));
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(createdRoomIdStore).toBeNull();
   });
 });

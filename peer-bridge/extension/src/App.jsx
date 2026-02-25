@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import HomeSection from './components/HomeSection'
 import CreateRoomSection from './components/CreateRoomSection'
@@ -18,13 +18,66 @@ import {
  *   home -> create|join -> chat
  */
 export default function App() {
-  const [view, setView] = useState('home')
+  const [view, setView] = useState(() => (getCreatedRoomId() ? 'create' : 'home'))
   const [roomId, setRoomId] = useState('')
   const [role, setRole] = useState(null)
   const [createError, setCreateError] = useState('')
   const [joinError, setJoinError] = useState('')
   const [createdRoomId, setCreatedRoomIdState] = useState(() => getCreatedRoomId())
-  const { connect, disconnect, sendMessage, messages, peers, capacity } = useWebSocket()
+  const sessionRef = useRef({ roomId: '', role: null, createdRoomId: null })
+  const { connect, disconnect, sendMessage, messages, peers, capacity, status } = useWebSocket()
+
+  useEffect(() => {
+    sessionRef.current = { roomId, role, createdRoomId }
+  }, [roomId, role, createdRoomId])
+
+  const leaveSessionOnClose = useCallback(() => {
+    const {
+      roomId: currentRoomId,
+      role: currentRole,
+      createdRoomId: currentCreatedRoomId,
+    } = sessionRef.current
+
+    if (!currentRoomId) return
+
+    if (currentRole === 'owner' && currentRoomId === currentCreatedRoomId) {
+      clearCreatedRoomId()
+    }
+
+    disconnect()
+  }, [disconnect])
+
+  useEffect(() => {
+    function handleBeforeUnload() {
+      leaveSessionOnClose()
+    }
+
+    function handlePageHide() {
+      leaveSessionOnClose()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pagehide', handlePageHide)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handlePageHide)
+      leaveSessionOnClose()
+    }
+  }, [leaveSessionOnClose])
+
+  useEffect(() => {
+    if (view !== 'chat' || status !== 'disconnected') return
+
+    if (role === 'owner' && roomId === createdRoomId) {
+      clearCreatedRoomId()
+      setCreatedRoomIdState(null)
+    }
+
+    setRoomId('')
+    setRole(null)
+    setView('home')
+    sessionRef.current = { roomId: '', role: null, createdRoomId: null }
+  }, [status, view, role, roomId, createdRoomId])
 
   async function handleCreate(payload) {
     setCreateError('')
@@ -57,7 +110,6 @@ export default function App() {
   }
 
   function handleOpenCreate() {
-    if (createdRoomId) return
     setCreateError('')
     setView('create')
   }
@@ -77,6 +129,7 @@ export default function App() {
     setRoomId('')
     setRole(null)
     setView('home')
+    sessionRef.current = { roomId: '', role: null, createdRoomId: null }
   }
 
   return (
@@ -84,12 +137,7 @@ export default function App() {
       <h1 className="app-title">Peer Bridge</h1>
 
       {view === 'home' && (
-        <HomeSection
-          onCreate={handleOpenCreate}
-          onJoin={handleOpenJoin}
-          createBlocked={Boolean(createdRoomId)}
-          createdRoomId={createdRoomId || ''}
-        />
+        <HomeSection onCreate={handleOpenCreate} onJoin={handleOpenJoin} />
       )}
 
       {view === 'create' && (
@@ -97,6 +145,7 @@ export default function App() {
           onCreate={handleCreate}
           onBack={() => setView('home')}
           errorMessage={createError}
+          initialRoomId={createdRoomId || ''}
         />
       )}
 

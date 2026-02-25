@@ -41,7 +41,7 @@ export default function ChatSection({
           </span>
         </div>
         <button className="leave-btn" onClick={onLeave} title="Leave room">
-          ✕
+          Leave Chat
         </button>
       </div>
 

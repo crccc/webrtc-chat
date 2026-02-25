@@ -31,6 +31,7 @@ describe("ChatSection", () => {
     expect(screen.getByText("room-c")).toBeDefined();
     expect(screen.getByText("owner")).toBeDefined();
     expect(screen.getByText("3/10")).toBeDefined();
+    expect(screen.getByText("Leave Chat")).toBeDefined();
   });
 
   it("sends trimmed message and clears input", async () => {

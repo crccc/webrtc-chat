@@ -11,6 +11,7 @@ const ERROR_MESSAGES = {
   INVALID_PASSCODE: 'Incorrect passcode.',
   DUPLICATE_USERNAME: 'This username is already in use in the room.',
   ROOM_FULL: 'Room is full (10/10).',
+  ROOM_CLOSED: 'Owner closed the room. You have been removed.',
 }
 
 export function getServerErrorMessage(code) {

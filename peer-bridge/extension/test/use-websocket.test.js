@@ -8,6 +8,9 @@ describe("useWebSocket error code mapping", () => {
     expect(getServerErrorMessage("INVALID_PASSCODE_FORMAT")).toBe(
       "Passcode must be 6-32 characters.",
     );
+    expect(getServerErrorMessage("ROOM_CLOSED")).toBe(
+      "Owner closed the room. You have been removed.",
+    );
   });
 
   it("falls back for unknown codes", () => {

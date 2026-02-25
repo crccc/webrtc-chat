@@ -21,6 +21,7 @@ const ERROR_MESSAGES = {
   INVALID_PASSCODE: "incorrect passcode",
   DUPLICATE_USERNAME: "username already taken in this room",
   ROOM_FULL: "room is full (10/10)",
+  ROOM_CLOSED: "owner closed the room",
 };
 
 function isUuidV4(value) {
@@ -61,7 +62,7 @@ function getJoinValidationError(payload, room) {
 }
 
 function createSignalingServer({ port = PORT, enableLog = true } = {}) {
-  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string> }>
+  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string>, owner: WebSocket }>
   const rooms = new Map();
   const wss = new WebSocketServer({ port });
 
@@ -72,6 +73,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
   wss.on("connection", (ws) => {
     ws.roomId = null;
     ws.username = null;
+    ws.isOwner = false;
 
     ws.on("message", (raw) => {
       let msg;
@@ -122,6 +124,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         passcode: payload.passcode,
         peers: new Set(),
         usernames: new Set(),
+        owner: ws,
       };
       rooms.set(payload.roomId, targetRoom);
     }
@@ -130,6 +133,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     targetRoom.usernames.add(payload.username);
     ws.roomId = payload.roomId;
     ws.username = payload.username;
+    ws.isOwner = targetRoom.owner === ws;
 
     if (enableLog) {
       console.log(
@@ -174,6 +178,42 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     if (!roomId || !rooms.has(roomId)) return;
 
     const room = rooms.get(roomId);
+
+    if (room.owner === ws) {
+      // Owner leaving closes the room and kicks all participants.
+      for (const peer of room.peers) {
+        if (peer === ws) continue;
+        send(peer, {
+          type: "error",
+          code: "ROOM_CLOSED",
+          message: ERROR_MESSAGES.ROOM_CLOSED,
+        });
+        room.peers.delete(peer);
+        if (peer.username) {
+          room.usernames.delete(peer.username);
+        }
+        peer.roomId = null;
+        peer.username = null;
+        peer.isOwner = false;
+        peer.close(4001, "ROOM_CLOSED");
+      }
+
+      room.peers.delete(ws);
+      if (ws.username) {
+        room.usernames.delete(ws.username);
+      }
+      rooms.delete(roomId);
+
+      if (enableLog) {
+        console.log(`[peer-bridge] Owner closed room "${roomId}".`);
+      }
+
+      ws.roomId = null;
+      ws.username = null;
+      ws.isOwner = false;
+      return;
+    }
+
     room.peers.delete(ws);
 
     if (ws.username) {
@@ -197,6 +237,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
 
     ws.roomId = null;
     ws.username = null;
+    ws.isOwner = false;
   }
 
   function broadcastPresence(room) {

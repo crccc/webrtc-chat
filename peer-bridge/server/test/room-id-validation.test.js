@@ -1,4 +1,5 @@
 const {
+  ERROR_MESSAGES,
   MAX_ROOM_CAPACITY,
   getJoinValidationError,
   isUuidV4,
@@ -90,5 +91,9 @@ describe("join validation", () => {
         null,
       ),
     ).toBeNull();
+  });
+
+  test("exports ROOM_CLOSED error message for owner room shutdown", () => {
+    expect(ERROR_MESSAGES.ROOM_CLOSED).toBe("owner closed the room");
   });
 });
