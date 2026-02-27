@@ -10,7 +10,7 @@
 const { WebSocketServer } = require("ws");
 const { randomUUID } = require("crypto");
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8888;
 const MAX_ROOM_CAPACITY = 8;
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

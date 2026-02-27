@@ -10,14 +10,12 @@ over a lightweight WebSocket signaling server, and exchange chat messages over W
 
 ```
 peer-bridge/
-  extension/       # Chrome Extension (Manifest V3) + Vite/React UI source
-    manifest.json
-    background.js
+  extension/       # Chrome Extension (Manifest V3) + WXT + React
     package.json
-    vite.config.js
-    index.html
+    wxt.config.ts
+    entrypoints/   # background + sidepanel entrypoints
     src/           # React source
-    dist/          # Built extension UI (git-ignored)
+    .output/       # WXT build output (git-ignored)
   server/          # Node.js WebSocket signaling server
   docs/            # Protocol documentation
 ```
@@ -32,10 +30,10 @@ peer-bridge/
 cd server
 npm install
 npm start
-# Listening on ws://localhost:3000
+# Listening on ws://localhost:8888
 ```
 
-### 2. Build the extension UI
+### 2. Build the extension
 
 ```bash
 cd extension
@@ -47,15 +45,16 @@ npm run build
 
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` folder.
+3. Click **Load unpacked** and select `extension/.output/chrome-mv3`.
+4. If `.output` is not visible in Finder, press `Cmd + Shift + .` to show hidden folders.
 
 ### 4. Develop with hot reload
 
 ```bash
 cd extension
 npm run dev
-# Opens a local Vite dev server at http://localhost:5173 for rapid UI iteration
-# Re-run `npm run build` and reload the extension to test changes in Chrome
+# Starts WXT dev mode with extension-aware reload/HMR
+# Use the printed .output/chrome-mv3 path for "Load unpacked" during dev
 ```
 
 ---

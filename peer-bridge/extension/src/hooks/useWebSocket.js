@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { getIceConfiguration } from '../webrtc/iceConfig'
 
-const SERVER_URL = 'ws://localhost:3000'
+const SERVER_URL = 'ws://localhost:8888'
 const ROOM_CAPACITY = 8
 
 const ERROR_MESSAGES = {

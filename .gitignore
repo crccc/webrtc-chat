@@ -4,4 +4,6 @@ peer-bridge/server/node_modules/
 # Extension Vite + React UI
 peer-bridge/extension/node_modules/
 peer-bridge/extension/dist/
+peer-bridge/extension/.output/
+peer-bridge/extension/.wxt/
 peer-bridge/extension/package-lock.json
