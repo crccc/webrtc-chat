@@ -11,7 +11,7 @@ const { WebSocketServer } = require("ws");
 const { randomUUID } = require("crypto");
 
 const PORT = process.env.PORT || 3000;
-const MAX_ROOM_CAPACITY = 10;
+const MAX_ROOM_CAPACITY = 8;
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ERROR_MESSAGES = {
@@ -21,9 +21,12 @@ const ERROR_MESSAGES = {
   ROOM_NOT_FOUND: "room does not exist",
   INVALID_PASSCODE: "incorrect passcode",
   DUPLICATE_USERNAME: "username already taken in this room",
-  ROOM_FULL: "room is full (10/10)",
+  ROOM_FULL: "room is full (8/8)",
   ROOM_CLOSED: "owner closed the room",
   UNSUPPORTED_ACTION: "unsupported action",
+  INVALID_SIGNAL_PAYLOAD: "invalid signaling payload",
+  NOT_IN_ROOM: "sender is not in an active room",
+  TARGET_NOT_FOUND: "target peer not found in room",
 };
 
 function isUuidV4(value) {
@@ -64,7 +67,7 @@ function getJoinValidationError(payload, room) {
 }
 
 function createSignalingServer({ port = PORT, enableLog = true } = {}) {
-  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string>, owner: WebSocket, peersById: Map<string, WebSocket> }>
+  // Map<roomId: string, { passcode: string, peers: Set<WebSocket>, usernames: Set<string>, owner: WebSocket | null, peersById: Map<string, WebSocket> }>
   const rooms = new Map();
   const wss = new WebSocketServer({ port });
 
@@ -95,7 +98,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         case "offer":
         case "answer":
         case "ice":
-          // Placeholder handlers; relay behavior is implemented in Task 02.
+          handleSignalRelay(ws, action, msg);
           break;
         default:
           send(ws, {
@@ -168,6 +171,7 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
       username: payload.username,
     });
 
+    broadcastPeerJoined(targetRoom, peerId, ws);
     broadcastPresence(targetRoom);
   }
 
@@ -176,49 +180,6 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     if (!roomId || !rooms.has(roomId)) return;
 
     const room = rooms.get(roomId);
-
-    if (room.owner === ws) {
-      // Owner leaving closes the room and kicks all participants.
-      for (const peer of room.peers) {
-        if (peer === ws) continue;
-        send(peer, {
-          type: "error",
-          code: "ROOM_CLOSED",
-          message: ERROR_MESSAGES.ROOM_CLOSED,
-        });
-        room.peers.delete(peer);
-        if (peer.username) {
-          room.usernames.delete(peer.username);
-        }
-        if (peer.peerId) {
-          room.peersById.delete(peer.peerId);
-        }
-        peer.roomId = null;
-        peer.username = null;
-        peer.peerId = null;
-        peer.isOwner = false;
-        peer.close(4001, "ROOM_CLOSED");
-      }
-
-      room.peers.delete(ws);
-      if (ws.username) {
-        room.usernames.delete(ws.username);
-      }
-      if (ws.peerId) {
-        room.peersById.delete(ws.peerId);
-      }
-      rooms.delete(roomId);
-
-      if (enableLog) {
-        console.log(`[peer-bridge] Owner closed room "${roomId}".`);
-      }
-
-      ws.roomId = null;
-      ws.username = null;
-      ws.peerId = null;
-      ws.isOwner = false;
-      return;
-    }
 
     room.peers.delete(ws);
 
@@ -241,6 +202,10 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
         console.log(`[peer-bridge] Room "${roomId}" removed (empty).`);
       }
     } else {
+      if (room.owner === ws) {
+        room.owner = room.peers.values().next().value || null;
+      }
+      broadcastPeerLeft(room, ws.peerId);
       broadcastPresence(room);
     }
 
@@ -248,6 +213,35 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     ws.username = null;
     ws.peerId = null;
     ws.isOwner = false;
+  }
+
+  function handleSignalRelay(ws, action, msg) {
+    console.log(`[peer-bridge] Signal relay: ${action} from ${ws.peerId} to ${msg?.to}`);
+    const roomId = ws.roomId;
+    if (!roomId || !rooms.has(roomId)) {
+      sendError(ws, "NOT_IN_ROOM");
+      return;
+    }
+
+    const toPeerId = typeof msg?.to === "string" ? msg.to.trim() : "";
+    const payload = msg?.payload;
+    if (!toPeerId || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+      sendError(ws, "INVALID_SIGNAL_PAYLOAD");
+      return;
+    }
+
+    const room = rooms.get(roomId);
+    const target = room.peersById.get(toPeerId);
+    if (!target || target === ws || target.readyState !== target.OPEN) {
+      sendError(ws, "TARGET_NOT_FOUND");
+      return;
+    }
+
+    send(target, {
+      type: action,
+      from: ws.peerId,
+      payload,
+    });
   }
 
   function broadcastPresence(room) {
@@ -258,6 +252,29 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
     };
 
     for (const peer of room.peers) {
+      send(peer, payload);
+    }
+  }
+
+  function broadcastPeerLeft(room, peerId) {
+    if (!peerId) return;
+    const payload = {
+      type: "signal.left",
+      peerId,
+    };
+    for (const peer of room.peers) {
+      send(peer, payload);
+    }
+  }
+
+  function broadcastPeerJoined(room, peerId, excludeWs) {
+    if (!peerId) return;
+    const payload = {
+      type: "signal.joined",
+      peerId,
+    };
+    for (const peer of room.peers) {
+      if (peer === excludeWs) continue;
       send(peer, payload);
     }
   }
@@ -274,6 +291,14 @@ function createSignalingServer({ port = PORT, enableLog = true } = {}) {
       peerId = randomUUID();
     }
     return peerId;
+  }
+
+  function sendError(ws, code) {
+    send(ws, {
+      type: "error",
+      code,
+      message: ERROR_MESSAGES[code],
+    });
   }
 
   function send(ws, payload) {

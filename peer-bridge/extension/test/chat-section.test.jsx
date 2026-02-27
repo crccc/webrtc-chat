@@ -21,7 +21,7 @@ describe("ChatSection", () => {
         roomId="room-c"
         role="owner"
         peers={3}
-        capacity={10}
+        capacity={8}
         messages={[]}
         onSend={() => {}}
         onLeave={() => {}}
@@ -30,7 +30,7 @@ describe("ChatSection", () => {
 
     expect(screen.getByText("room-c")).toBeDefined();
     expect(screen.getByText("owner")).toBeDefined();
-    expect(screen.getByText("3/10")).toBeDefined();
+    expect(screen.getByText("3/8")).toBeDefined();
     expect(screen.getByText("Leave Chat")).toBeDefined();
   });
 
@@ -42,7 +42,7 @@ describe("ChatSection", () => {
         roomId="room-c"
         role="participant"
         peers={1}
-        capacity={10}
+        capacity={8}
         messages={[]}
         onSend={onSend}
         onLeave={() => {}}
@@ -65,7 +65,7 @@ describe("ChatSection", () => {
         roomId="room-c"
         role="participant"
         peers={1}
-        capacity={10}
+        capacity={8}
         messages={[]}
         onSend={() => {}}
         onLeave={onLeave}

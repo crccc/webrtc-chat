@@ -17,7 +17,7 @@ vi.mock("../src/hooks/useWebSocket", () => ({
     messages: [],
     status: "idle",
     peers: 1,
-    capacity: 10,
+    capacity: 8,
   }),
 }));
 
@@ -84,7 +84,7 @@ describe("App phase-3 flow", () => {
 
   it("shows ROOM_FULL error in join flow", async () => {
     const user = userEvent.setup();
-    connect.mockResolvedValue({ ok: false, code: "ROOM_FULL", message: "Room is full (10/10)." });
+    connect.mockResolvedValue({ ok: false, code: "ROOM_FULL", message: "Room is full (8/8)." });
     render(<App />);
 
     await user.click(screen.getByText("Join Room"));
@@ -96,7 +96,7 @@ describe("App phase-3 flow", () => {
     await user.type(screen.getByLabelText("Passcode"), "secret123");
     await user.click(screen.getByText("Join Room"));
 
-    expect(screen.getByText("Room is full (10/10).")).toBeDefined();
+    expect(screen.getByText("Room is full (8/8).")).toBeDefined();
     expect(screen.queryByText("participant")).toBeNull();
   });
 

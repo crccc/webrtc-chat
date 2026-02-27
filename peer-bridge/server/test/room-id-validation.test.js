@@ -61,7 +61,7 @@ describe("join validation", () => {
     expect(code).toBe("DUPLICATE_USERNAME");
   });
 
-  test("allows 10th member, rejects 11th", () => {
+  test("allows max member, rejects next", () => {
     const roomAt9 = createRoomState({ passcode: "secret123", size: MAX_ROOM_CAPACITY - 1 });
     const ninthCode = getJoinValidationError(
       { flow: "join", roomId: VALID_ROOM_ID, username: "user10", passcode: "secret123" },

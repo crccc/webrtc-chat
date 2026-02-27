@@ -5,7 +5,7 @@
 2. Create Room 的 `roomId` 不可手動編輯，但可 `Regenerate`。
 3. Join Room 必須提供 passcode。
 4. `username` 必填，且房內唯一。
-5. 單一 room 上限 10 人，包含 owner。
+5. 單一 room 上限 8 人，包含 owner。
 6. 協定方向採 envelope：`v/domain/action/payload`。
 7. 預留 `webrtc.*` action 作為未來 video/audio signaling 擴充點。
 8. 現階段不實作 media stream（camera/mic）流程。

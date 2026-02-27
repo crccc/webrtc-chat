@@ -1,21 +1,18 @@
-# Peer Bridge – Signaling Protocol (Phase 3)
+# Peer Bridge Signaling Protocol (Realtime)
 
-This document describes the WebSocket protocol between the
-Chrome extension client and the Node.js signaling server in Phase 3.
+This document describes the signaling protocol between extension clients and the
+Node.js signaling server. Chat text payloads are sent through WebRTC DataChannels,
+not through WebSocket `message` broadcasts.
 
-All messages are **JSON objects** serialized as UTF-8 text frames.
+All signaling frames are JSON objects sent over WebSocket text frames.
 
----
-
-## Client → Server
+## Client -> Server
 
 ### `join`
-Sent once after the WebSocket connection is open.
-Handles both room creation and join.
 
 ```json
 {
-  "type": "join",
+  "action": "join",
   "flow": "create",
   "room": "<uuidv4-roomId>",
   "username": "<username>",
@@ -23,99 +20,94 @@ Handles both room creation and join.
 }
 ```
 
-| Field    | Type   | Description |
-|----------|--------|-------------|
-| type     | string | `"join"` |
-| flow     | string | `"create"` or `"join"` |
-| room     | string | UUIDv4 room identifier |
-| username | string | Required, unique within room |
-| passcode | string | Required, 6-32 characters |
+| Field | Type | Description |
+| --- | --- | --- |
+| `action` | string | `join` |
+| `flow` | string | `create` or `join` |
+| `room` | string | UUIDv4 room id |
+| `username` | string | Required, unique in room |
+| `passcode` | string | Required, 6-32 characters |
 
----
-
-### `message`
-Send a text message to all other peers in the room.
+### `offer` / `answer` / `ice`
 
 ```json
-{ "type": "message", "room": "<roomId>", "text": "<text>" }
+{
+  "action": "offer",
+  "to": "<targetPeerId>",
+  "payload": { "...": "rtc payload" }
+}
 ```
 
-| Field | Type   | Description |
-|-------|--------|-------------|
-| type  | string | `"message"` |
-| room  | string | Must match the room the client joined |
-| text  | string | The message body |
+| Field | Type | Description |
+| --- | --- | --- |
+| `action` | string | `offer`, `answer`, or `ice` |
+| `to` | string | Target peer id in same room |
+| `payload` | object | Signaling payload for that action |
 
----
-
-## Server → Client
+## Server -> Client
 
 ### `joined`
-Sent to the client that just successfully joined a room.
 
 ```json
 {
   "type": "joined",
   "room": "<roomId>",
+  "peerId": "<selfPeerId>",
+  "peerList": ["<existingPeerId>"],
   "username": "<username>",
   "peers": 2,
-  "capacity": 10
+  "capacity": 8
 }
 ```
 
-| Field    | Type   | Description |
-|----------|--------|-------------|
-| type     | string | `"joined"` |
-| room     | string | The room that was joined |
-| username | string | Username accepted by the server |
-| peers    | number | Total members in room (including self) |
-| capacity | number | Room max capacity (always 10) |
+### `signal.joined`
 
----
+Sent to existing peers when a new peer joins.
+
+```json
+{ "type": "signal.joined", "peerId": "<newPeerId>" }
+```
+
+### `signal.left`
+
+Sent to remaining peers when a peer leaves.
+
+```json
+{ "type": "signal.left", "peerId": "<leftPeerId>" }
+```
 
 ### `presence`
-Broadcast when members join/leave, so clients can update member count.
 
 ```json
-{ "type": "presence", "peers": 4, "capacity": 10 }
+{ "type": "presence", "peers": 4, "capacity": 8 }
 ```
 
-| Field    | Type   | Description |
-|----------|--------|-------------|
-| type     | string | `"presence"` |
-| peers    | number | Current room member count |
-| capacity | number | Room max capacity |
-
----
-
-### `message`
-Delivered to every peer in the room except the sender.
+### `offer` / `answer` / `ice` relay
 
 ```json
-{ "type": "message", "from": "<username>", "text": "<text>" }
+{
+  "type": "offer",
+  "from": "<senderPeerId>",
+  "payload": { "...": "rtc payload" }
+}
 ```
-
-| Field | Type   | Description |
-|-------|--------|-------------|
-| type  | string | `"message"` |
-| from  | string | Username of the sender |
-| text  | string | The message body |
-
----
 
 ### `error`
-Sent when join validation fails.
 
 ```json
-{ "type": "error", "code": "ROOM_FULL", "message": "room is full (10/10)" }
+{ "type": "error", "code": "ROOM_FULL", "message": "room is full (8/8)" }
 ```
 
-| Code                     | Meaning |
-|--------------------------|---------|
-| `INVALID_ROOM_ID`        | room is not valid UUIDv4 |
-| `INVALID_USERNAME`       | username missing |
-| `INVALID_PASSCODE_FORMAT`| passcode not 6-32 chars |
-| `ROOM_NOT_FOUND`         | join flow on non-existing room |
-| `INVALID_PASSCODE`       | passcode mismatch |
-| `DUPLICATE_USERNAME`     | username already exists in room |
-| `ROOM_FULL`              | room has reached 10 members |
+| Code | Meaning |
+| --- | --- |
+| `INVALID_ROOM_ID` | Room id is not UUIDv4 |
+| `INVALID_USERNAME` | Username missing |
+| `INVALID_PASSCODE_FORMAT` | Passcode not 6-32 chars |
+| `ROOM_NOT_FOUND` | Join flow on non-existing room |
+| `INVALID_PASSCODE` | Passcode mismatch |
+| `DUPLICATE_USERNAME` | Username already exists in room |
+| `ROOM_FULL` | Room reached 8 participants |
+| `UNSUPPORTED_ACTION` | Unknown or legacy action |
+| `NOT_IN_ROOM` | Signaling action sent before join |
+| `INVALID_SIGNAL_PAYLOAD` | Missing/invalid `to` or `payload` |
+| `TARGET_NOT_FOUND` | Target peer not in sender room |

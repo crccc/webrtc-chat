@@ -4,9 +4,9 @@
 | --- | --- | --- |
 | `create-room.feature` | Create success/failure skeleton | `extension/test/create-room.test.js`, `server/test/create-room.test.js` |
 | `join-room.feature` | Join success/failure skeleton | `extension/test/join-room.test.js`, `server/test/join-room.test.js` |
-| `chat.feature` | Message send/receive skeleton | `server/test/chat.test.js`, `extension/test/chat.test.js` |
+| `chat.feature` | DataChannel chat send/receive skeleton | `extension/test/use-websocket.test.js` |
 | `protocol-compat.feature` | Unsupported action tolerance | `server/test/protocol-compat.test.js` |
-| `room-capacity.feature` | 10/10 capacity boundary | `server/test/room-capacity.test.js`, `extension/test/room-capacity.test.js` |
+| `room-capacity.feature` | 8/8 capacity boundary | `server/test/capacity-limit.test.js` |
 
 ## Current Test Baseline
 - Extension smoke test: `extension/test/smoke.test.js`

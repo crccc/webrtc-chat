@@ -18,18 +18,18 @@ Feature: Room capacity
     When another participant joins with username "alice"
     Then the join should be rejected with DUPLICATE_USERNAME
 
-  Scenario: The 10th participant can join
-    Given a room has 9 connected participants including owner
+  Scenario: The 8th participant can join
+    Given a room has 7 connected participants including owner
     When one more participant joins
-    Then the room should report 10 participants
+    Then the room should report 8 participants
 
-  Scenario: The 11th participant is rejected
-    Given a room already has 10 connected participants including owner
+  Scenario: The 9th participant is rejected
+    Given a room already has 8 connected participants including owner
     When one more participant attempts to join
     Then the join should be rejected with ROOM_FULL
 
   Scenario: A slot is available after someone leaves
-    Given a room reached 10 connected participants
+    Given a room reached 8 connected participants
     When one participant leaves the room
     And a new participant attempts to join
     Then the new participant should be accepted

@@ -83,6 +83,8 @@ describe("dispatcher and peerId", () => {
 
     const alice = await openClient(port);
     sockets.push(alice);
+    const ownerPeerJoinedEventPromise = waitForMessage(owner, { type: "signal.joined" });
+    const aliceJoinedPromise = waitForMessage(alice, { type: "joined" });
     alice.send(
       JSON.stringify({
         action: "join",
@@ -93,11 +95,13 @@ describe("dispatcher and peerId", () => {
       }),
     );
 
-    const aliceJoined = await waitForMessage(alice, { type: "joined" });
+    const ownerPeerJoinedEvent = await ownerPeerJoinedEventPromise;
+    const aliceJoined = await aliceJoinedPromise;
     expect(isUuidV4(aliceJoined.peerId)).toBe(true);
     expect(aliceJoined.peerId).not.toBe(ownerJoined.peerId);
     expect(aliceJoined.peerList).toEqual([ownerJoined.peerId]);
     expect(aliceJoined.peers).toBe(2);
+    expect(ownerPeerJoinedEvent.peerId).toBe(aliceJoined.peerId);
   });
 
   test("unsupported action returns UNSUPPORTED_ACTION error", async () => {
@@ -105,6 +109,19 @@ describe("dispatcher and peerId", () => {
     sockets.push(ws);
 
     ws.send(JSON.stringify({ action: "ping" }));
+
+    const error = await waitForMessage(ws, { type: "error" });
+    expect(error).toMatchObject({
+      type: "error",
+      code: "UNSUPPORTED_ACTION",
+    });
+  });
+
+  test("legacy ws chat action is rejected deterministically", async () => {
+    const ws = await openClient(port);
+    sockets.push(ws);
+
+    ws.send(JSON.stringify({ type: "message", text: "hello" }));
 
     const error = await waitForMessage(ws, { type: "error" });
     expect(error).toMatchObject({

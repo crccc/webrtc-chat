@@ -1,8 +1,8 @@
 # Peer Bridge
 
-**Peer Bridge** is a minimal, room-based messaging system for Chrome extensions.
-Two (or more) instances of the extension can join the same room and exchange
-messages in real time through a lightweight WebSocket signaling server.
+**Peer Bridge** is a minimal, room-based realtime messaging system for Chrome extensions.
+Two (or more) instances of the extension join the same room, negotiate peer links
+over a lightweight WebSocket signaling server, and exchange chat messages over WebRTC DataChannels.
 
 ---
 

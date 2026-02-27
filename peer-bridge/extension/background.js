@@ -11,5 +11,6 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Open the side panel on toolbar icon click
 chrome.action.onClicked.addListener((tab) => {
+  console.log("[peer-bridge] Toolbar icon clicked. Opening side panel...");
   chrome.sidePanel.open({ tabId: tab.id });
 });
