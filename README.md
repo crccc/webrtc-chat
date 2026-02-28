@@ -9,7 +9,7 @@ over a lightweight WebSocket signaling server, and exchange chat messages over W
 ## Project Structure
 
 ```
-peer-bridge/
+webrtc-chat/
   extension/       # Chrome Extension (Manifest V3) + WXT + React
     package.json
     wxt.config.ts
@@ -18,6 +18,7 @@ peer-bridge/
     .output/       # WXT build output (git-ignored)
   server/          # Node.js WebSocket signaling server
   docs/            # Protocol documentation
+  plans/           # Task plans and completion log
 ```
 
 ---

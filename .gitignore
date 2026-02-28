@@ -1,9 +1,11 @@
-peer-bridge/server/package-lock.json
-peer-bridge/server/node_modules/
+server/package-lock.json
+server/node_modules/
 
 # Extension Vite + React UI
-peer-bridge/extension/node_modules/
-peer-bridge/extension/dist/
-peer-bridge/extension/.output/
-peer-bridge/extension/.wxt/
-peer-bridge/extension/package-lock.json
+extension/node_modules/
+extension/dist/
+extension/.output/
+extension/.wxt/
+extension/package-lock.json
+
+.DS_Store
