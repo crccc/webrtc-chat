@@ -57,6 +57,15 @@ npm run dev
 # Use the printed .output/chrome-mv3 path for "Load unpacked" during dev
 ```
 
+### 5. Validate the extension package
+
+```bash
+cd extension
+npm test
+npm run lint
+npm run typecheck
+```
+
 ---
 
 ## Protocol

@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import CreateRoomSection from "../src/components/CreateRoomSection.jsx";
+import CreateRoomSection from "../src/components/CreateRoomSection";
 
 const uuidQueue = [
   "11111111-1111-4111-8111-111111111111",
@@ -33,7 +33,7 @@ beforeEach(() => {
 describe("CreateRoomSection phase-3", () => {
   it("shows an initial UUIDv4 room id", () => {
     render(<CreateRoomSection onCreate={() => {}} onBack={() => {}} />);
-    const input = screen.getByLabelText("Room ID");
+    const input = screen.getByLabelText("Room ID") as HTMLInputElement;
 
     expect(UUID_V4_REGEX.test(input.value)).toBe(true);
     expect(input.value).toBe("11111111-1111-4111-8111-111111111111");
@@ -43,7 +43,7 @@ describe("CreateRoomSection phase-3", () => {
     const user = userEvent.setup();
     render(<CreateRoomSection onCreate={() => {}} onBack={() => {}} />);
 
-    const input = screen.getByLabelText("Room ID");
+    const input = screen.getByLabelText("Room ID") as HTMLInputElement;
     const firstValue = input.value;
     await user.click(screen.getByText("Regenerate"));
 
@@ -53,7 +53,7 @@ describe("CreateRoomSection phase-3", () => {
 
   it("keeps room id input readonly", () => {
     render(<CreateRoomSection onCreate={() => {}} onBack={() => {}} />);
-    const input = screen.getByLabelText("Room ID");
+    const input = screen.getByLabelText("Room ID") as HTMLInputElement;
     expect(input.readOnly).toBe(true);
   });
 

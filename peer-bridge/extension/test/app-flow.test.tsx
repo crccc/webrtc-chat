@@ -2,12 +2,12 @@ import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App from "../src/App.jsx";
+import App from "../src/App";
 
 const connect = vi.fn();
 const disconnect = vi.fn();
 const sendMessage = vi.fn();
-let createdRoomIdStore = null;
+let createdRoomIdStore: string | null = null;
 
 vi.mock("../src/hooks/useWebSocket", () => ({
   useWebSocket: () => ({
@@ -105,7 +105,7 @@ describe("App phase-3 flow", () => {
     render(<App />);
 
     expect(screen.getByText("Regenerate")).toBeDefined();
-    expect(screen.getByLabelText("Room ID").value).toBe(
+    expect((screen.getByLabelText("Room ID") as HTMLInputElement).value).toBe(
       "99999999-9999-4999-8999-999999999999",
     );
   });

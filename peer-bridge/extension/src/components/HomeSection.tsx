@@ -1,7 +1,12 @@
+interface HomeSectionProps {
+  onCreate: () => void
+  onJoin: () => void
+}
+
 /**
  * HomeSection – entry screen to choose create/join flow.
  */
-export default function HomeSection({ onCreate, onJoin }) {
+export default function HomeSection({ onCreate, onJoin }: HomeSectionProps) {
   return (
     <section className="home-section">
       <p className="home-subtitle">Choose how you want to enter a room.</p>

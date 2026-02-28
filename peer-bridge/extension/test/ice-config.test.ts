@@ -7,7 +7,8 @@ import {
 
 describe("iceConfig", () => {
   afterEach(() => {
-    delete globalThis.PEER_BRIDGE_ICE_SERVERS;
+    delete (globalThis as typeof globalThis & { PEER_BRIDGE_ICE_SERVERS?: RTCIceServer[] })
+      .PEER_BRIDGE_ICE_SERVERS;
   });
 
   it("uses Google STUN defaults", () => {

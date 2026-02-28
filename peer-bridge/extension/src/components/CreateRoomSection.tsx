@@ -1,5 +1,13 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { generateUuidV4 } from '../utils/uuid'
+import type { RoomFormPayload } from '../types'
+
+interface CreateRoomSectionProps {
+  onCreate: (payload: RoomFormPayload) => void
+  onBack: () => void
+  errorMessage?: string
+  initialRoomId?: string
+}
 
 /**
  * CreateRoomSection – auto-generates room id and collects username/passcode.
@@ -10,7 +18,7 @@ export default function CreateRoomSection({
   onBack,
   errorMessage = '',
   initialRoomId = '',
-}) {
+}: CreateRoomSectionProps) {
   const [roomId, setRoomId] = useState(() => initialRoomId || generateUuidV4())
   const [username, setUsername] = useState('')
   const [passcode, setPasscode] = useState('')
@@ -46,7 +54,7 @@ export default function CreateRoomSection({
     setRoomId(generateUuidV4())
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') handleCreate()
   }
 

@@ -1,14 +1,14 @@
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-function randomHexDigit() {
+function randomHexDigit(): string {
   return Math.floor(Math.random() * 16).toString(16)
 }
 
-function randomByte() {
+function randomByte(): number {
   return Math.floor(Math.random() * 256)
 }
 
-function fallbackUuidV4() {
+function fallbackUuidV4(): string {
   const bytes = new Uint8Array(16)
 
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
@@ -32,11 +32,11 @@ function fallbackUuidV4() {
   ].join('-')
 }
 
-export function isUuidV4(value) {
+export function isUuidV4(value: string): boolean {
   return typeof value === 'string' && UUID_V4_REGEX.test(value)
 }
 
-export function generateUuidV4() {
+export function generateUuidV4(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     const uuid = crypto.randomUUID()
     if (isUuidV4(uuid)) {

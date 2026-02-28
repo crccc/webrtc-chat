@@ -1,10 +1,19 @@
-import { useRef, useState, useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { getIceConfiguration } from '../webrtc/iceConfig'
+import type {
+  ChatMessage,
+  ConnectArgs,
+  ConnectFlow,
+  ConnectResult,
+  ConnectionStatus,
+  MessageType,
+  RealtimeHookResult,
+} from '../types'
 
 const SERVER_URL = 'ws://localhost:8888'
 const ROOM_CAPACITY = 8
 
-const ERROR_MESSAGES = {
+const ERROR_MESSAGES: Record<string, string> = {
   INVALID_ROOM_ID: 'Room ID must be a valid UUIDv4.',
   INVALID_USERNAME: 'Username is required.',
   INVALID_PASSCODE_FORMAT: 'Passcode must be 6-32 characters.',
@@ -18,23 +27,79 @@ const ERROR_MESSAGES = {
   ROOM_CLOSED: 'Room was closed.',
 }
 
-export function getServerErrorMessage(code) {
-  return ERROR_MESSAGES[code] || 'Unable to join room. Please try again.'
+interface PeerConnectionEntry {
+  pc: RTCPeerConnection
+  dc: RTCDataChannel | null
 }
 
-export function shouldInitiateOffer(localPeerId, remotePeerId) {
+interface ParsedChannelMessage {
+  from: string
+  text: string
+}
+
+interface JoinedServerMessage {
+  type: 'joined'
+  room: string
+  peerId?: string
+  peerList?: string[]
+  peers?: number
+  capacity?: number
+  username: string
+}
+
+interface PresenceServerMessage {
+  type: 'presence'
+  peers?: number
+  capacity?: number
+}
+
+interface PeerLifecycleServerMessage {
+  type: 'signal.joined' | 'signal.left'
+  peerId?: string
+}
+
+interface RelayServerMessage {
+  type: 'offer' | 'answer' | 'ice'
+  from?: string
+  payload?: RTCSessionDescriptionInit | RTCIceCandidateInit
+}
+
+interface ErrorServerMessage {
+  type: 'error'
+  code?: string
+}
+
+type ServerMessage =
+  | JoinedServerMessage
+  | PresenceServerMessage
+  | PeerLifecycleServerMessage
+  | RelayServerMessage
+  | ErrorServerMessage
+  | { type?: string; [key: string]: unknown }
+
+export function getServerErrorMessage(code?: string): string {
+  return (code && ERROR_MESSAGES[code]) || 'Unable to join room. Please try again.'
+}
+
+export function shouldInitiateOffer(localPeerId: string, remotePeerId: string): boolean {
   if (!localPeerId || !remotePeerId) return false
   return localPeerId < remotePeerId
 }
 
-export function decodeChannelMessage(data, fallbackFrom) {
+export function decodeChannelMessage(
+  data: unknown,
+  fallbackFrom: string,
+): ParsedChannelMessage | null {
   if (typeof data !== 'string' || data.trim().length === 0) return null
 
   try {
-    const parsed = JSON.parse(data)
+    const parsed = JSON.parse(data) as { from?: unknown; text?: unknown }
     if (typeof parsed?.text !== 'string' || parsed.text.trim().length === 0) return null
     return {
-      from: typeof parsed.from === 'string' && parsed.from.trim().length > 0 ? parsed.from : fallbackFrom,
+      from:
+        typeof parsed.from === 'string' && parsed.from.trim().length > 0
+          ? parsed.from
+          : fallbackFrom,
       text: parsed.text.trim(),
     }
   } catch {
@@ -45,31 +110,43 @@ export function decodeChannelMessage(data, fallbackFrom) {
   }
 }
 
-/**
- * useWebSocket – signaling + WebRTC DataChannel realtime hook.
- */
-export function useWebSocket() {
-  const socketRef = useRef(null)
-  const roomRef = useRef(null)
+function createChatMessage(text: string, type: MessageType): ChatMessage {
+  return {
+    id: Date.now() + Math.random(),
+    text,
+    type,
+  }
+}
+
+export function useWebSocket(): RealtimeHookResult {
+  const socketRef = useRef<WebSocket | null>(null)
+  const roomRef = useRef<string | null>(null)
   const usernameRef = useRef('')
   const peerIdRef = useRef('')
-  const peersRef = useRef(new Map())
-  const [messages, setMessages] = useState([])
-  const [status, setStatus] = useState('idle')
+  const peersRef = useRef<Map<string, PeerConnectionEntry>>(new Map())
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [status, setStatus] = useState<ConnectionStatus>('idle')
   const [peers, setPeers] = useState(0)
   const [capacity, setCapacity] = useState(ROOM_CAPACITY)
 
-  const addMessage = useCallback((text, type) => {
-    setMessages((prev) => [...prev, { id: Date.now() + Math.random(), text, type }])
+  const addMessage = useCallback((text: string, type: MessageType) => {
+    setMessages((prev: ChatMessage[]) => [...prev, createChatMessage(text, type)])
   }, [])
 
-  const sendSignal = useCallback((action, to, payload) => {
-    const ws = socketRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN) return
-    ws.send(JSON.stringify({ action, to, payload }))
-  }, [])
+  const sendSignal = useCallback(
+    (
+      action: 'offer' | 'answer' | 'ice',
+      to: string,
+      payload: RTCSessionDescriptionInit | RTCIceCandidateInit,
+    ) => {
+      const ws = socketRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      ws.send(JSON.stringify({ action, to, payload }))
+    },
+    [],
+  )
 
-  const closePeer = useCallback((remotePeerId) => {
+  const closePeer = useCallback((remotePeerId: string) => {
     const entry = peersRef.current.get(remotePeerId)
     if (!entry) return
     try {
@@ -78,7 +155,7 @@ export function useWebSocket() {
       // Ignore close failures.
     }
     try {
-      entry.pc?.close()
+      entry.pc.close()
     } catch {
       // Ignore close failures.
     }
@@ -93,7 +170,7 @@ export function useWebSocket() {
   }, [closePeer])
 
   const setupDataChannel = useCallback(
-    (remotePeerId, dc) => {
+    (remotePeerId: string, dc: RTCDataChannel) => {
       const existing = peersRef.current.get(remotePeerId)
       if (!existing) return
       existing.dc = dc
@@ -110,7 +187,7 @@ export function useWebSocket() {
   )
 
   const ensurePeerConnection = useCallback(
-    (remotePeerId, { initiator }) => {
+    (remotePeerId: string, options: { initiator: boolean }): PeerConnectionEntry | null => {
       if (!remotePeerId || remotePeerId === peerIdRef.current) return null
 
       const existing = peersRef.current.get(remotePeerId)
@@ -121,12 +198,12 @@ export function useWebSocket() {
       }
 
       const pc = new RTCPeerConnection(getIceConfiguration())
-      const entry = { pc, dc: null }
+      const entry: PeerConnectionEntry = { pc, dc: null }
       peersRef.current.set(remotePeerId, entry)
 
       pc.onicecandidate = (event) => {
         if (!event.candidate) return
-        sendSignal('ice', remotePeerId, event.candidate)
+        sendSignal('ice', remotePeerId, event.candidate.toJSON())
       }
 
       pc.ondatachannel = (event) => {
@@ -139,7 +216,7 @@ export function useWebSocket() {
         }
       }
 
-      if (initiator) {
+      if (options.initiator) {
         const dc = pc.createDataChannel('chat', { ordered: true })
         setupDataChannel(remotePeerId, dc)
       }
@@ -150,13 +227,13 @@ export function useWebSocket() {
   )
 
   const createAndSendOffer = useCallback(
-    async (remotePeerId) => {
+    async (remotePeerId: string) => {
       const entry = ensurePeerConnection(remotePeerId, { initiator: true })
       if (!entry) return
       try {
         const offer = await entry.pc.createOffer()
         await entry.pc.setLocalDescription(offer)
-        sendSignal('offer', remotePeerId, entry.pc.localDescription || offer)
+        sendSignal('offer', remotePeerId, entry.pc.localDescription ?? offer)
       } catch (error) {
         console.warn('[peer-bridge] offer negotiation failed', error)
       }
@@ -165,7 +242,7 @@ export function useWebSocket() {
   )
 
   const onPeerJoined = useCallback(
-    (remotePeerId) => {
+    (remotePeerId?: string) => {
       if (!remotePeerId || remotePeerId === peerIdRef.current) return
       if (shouldInitiateOffer(peerIdRef.current, remotePeerId)) {
         void createAndSendOffer(remotePeerId)
@@ -177,14 +254,15 @@ export function useWebSocket() {
   )
 
   const onPeerLeft = useCallback(
-    (remotePeerId) => {
+    (remotePeerId?: string) => {
+      if (!remotePeerId) return
       closePeer(remotePeerId)
     },
     [closePeer],
   )
 
   const onSignalOffer = useCallback(
-    async (msg) => {
+    async (msg: RelayServerMessage) => {
       const remotePeerId = typeof msg.from === 'string' ? msg.from : ''
       const payload = msg.payload
       if (!remotePeerId || !payload) return
@@ -192,10 +270,10 @@ export function useWebSocket() {
       try {
         const entry = ensurePeerConnection(remotePeerId, { initiator: false })
         if (!entry) return
-        await entry.pc.setRemoteDescription(payload)
+        await entry.pc.setRemoteDescription(payload as RTCSessionDescriptionInit)
         const answer = await entry.pc.createAnswer()
         await entry.pc.setLocalDescription(answer)
-        sendSignal('answer', remotePeerId, entry.pc.localDescription || answer)
+        sendSignal('answer', remotePeerId, entry.pc.localDescription ?? answer)
       } catch (error) {
         console.warn('[peer-bridge] failed to handle offer', error)
       }
@@ -203,34 +281,34 @@ export function useWebSocket() {
     [ensurePeerConnection, sendSignal],
   )
 
-  const onSignalAnswer = useCallback(async (msg) => {
+  const onSignalAnswer = useCallback(async (msg: RelayServerMessage) => {
     const remotePeerId = typeof msg.from === 'string' ? msg.from : ''
     const payload = msg.payload
     if (!remotePeerId || !payload) return
     const entry = peersRef.current.get(remotePeerId)
     if (!entry) return
     try {
-      await entry.pc.setRemoteDescription(payload)
+      await entry.pc.setRemoteDescription(payload as RTCSessionDescriptionInit)
     } catch (error) {
       console.warn('[peer-bridge] failed to handle answer', error)
     }
   }, [])
 
-  const onSignalIce = useCallback(async (msg) => {
+  const onSignalIce = useCallback(async (msg: RelayServerMessage) => {
     const remotePeerId = typeof msg.from === 'string' ? msg.from : ''
     const payload = msg.payload
     if (!remotePeerId || !payload) return
     const entry = peersRef.current.get(remotePeerId)
     if (!entry) return
     try {
-      await entry.pc.addIceCandidate(payload)
+      await entry.pc.addIceCandidate(payload as RTCIceCandidateInit)
     } catch (error) {
       console.warn('[peer-bridge] failed to add ice candidate', error)
     }
   }, [])
 
   const connect = useCallback(
-    ({ roomId, username, passcode, flow = 'join' }) => {
+    ({ roomId, username, passcode, flow = 'join' }: ConnectArgs): Promise<ConnectResult> => {
       if (socketRef.current) {
         socketRef.current.close(1000, 'REPLACED_SESSION')
       }
@@ -247,11 +325,11 @@ export function useWebSocket() {
       const ws = new WebSocket(SERVER_URL)
       socketRef.current = ws
 
-      return new Promise((resolve) => {
+      return new Promise<ConnectResult>((resolve) => {
         let settled = false
         let joined = false
 
-        function resolveOnce(value) {
+        function resolveOnce(value: ConnectResult) {
           if (settled) return
           settled = true
           resolve(value)
@@ -261,7 +339,7 @@ export function useWebSocket() {
           ws.send(
             JSON.stringify({
               action: 'join',
-              flow,
+              flow: flow as ConnectFlow,
               room: roomId,
               username,
               passcode,
@@ -271,50 +349,52 @@ export function useWebSocket() {
 
         ws.addEventListener('message', (event) => {
           try {
-            const msg = JSON.parse(event.data)
+            const msg = JSON.parse(event.data as string) as ServerMessage
 
             switch (msg.type) {
-              case 'joined':
+              case 'joined': {
+                const joinedMsg = msg as JoinedServerMessage
                 joined = true
                 setStatus('connected')
-                peerIdRef.current = msg.peerId || ''
-                setPeers(msg.peers ?? 1)
-                setCapacity(msg.capacity ?? ROOM_CAPACITY)
+                peerIdRef.current = joinedMsg.peerId ?? ''
+                setPeers(joinedMsg.peers ?? 1)
+                setCapacity(joinedMsg.capacity ?? ROOM_CAPACITY)
                 if (flow === 'create') {
-                  addMessage(`✓ Created room "${msg.room}" as ${msg.username}.`, 'info')
+                  addMessage(`✓ Created room "${joinedMsg.room}" as ${joinedMsg.username}.`, 'info')
                 } else {
-                  addMessage(`✓ Joined room "${msg.room}" as ${msg.username}.`, 'info')
+                  addMessage(`✓ Joined room "${joinedMsg.room}" as ${joinedMsg.username}.`, 'info')
                 }
-                if (Array.isArray(msg.peerList)) {
-                  for (const remotePeerId of msg.peerList) {
+                if (Array.isArray(joinedMsg.peerList)) {
+                  for (const remotePeerId of joinedMsg.peerList) {
                     onPeerJoined(remotePeerId)
                   }
                 }
                 resolveOnce({ ok: true })
                 break
+              }
               case 'signal.joined':
-                onPeerJoined(msg.peerId)
+                onPeerJoined((msg as PeerLifecycleServerMessage).peerId)
                 break
               case 'signal.left':
-                onPeerLeft(msg.peerId)
+                onPeerLeft((msg as PeerLifecycleServerMessage).peerId)
                 break
               case 'presence':
-                setPeers(msg.peers ?? 0)
-                setCapacity(msg.capacity ?? ROOM_CAPACITY)
+                setPeers((msg as PresenceServerMessage).peers ?? 0)
+                setCapacity((msg as PresenceServerMessage).capacity ?? ROOM_CAPACITY)
                 break
               case 'offer':
-                void onSignalOffer(msg)
+                void onSignalOffer(msg as RelayServerMessage)
                 break
               case 'answer':
-                void onSignalAnswer(msg)
+                void onSignalAnswer(msg as RelayServerMessage)
                 break
               case 'ice':
-                void onSignalIce(msg)
+                void onSignalIce(msg as RelayServerMessage)
                 break
               case 'error': {
-                const errorMessage = getServerErrorMessage(msg.code)
+                const errorMessage = getServerErrorMessage((msg as ErrorServerMessage).code)
                 setStatus('error')
-                resolveOnce({ ok: false, code: msg.code, message: errorMessage })
+                resolveOnce({ ok: false, code: (msg as ErrorServerMessage).code, message: errorMessage })
                 ws.close()
                 break
               }
@@ -362,7 +442,7 @@ export function useWebSocket() {
   }, [closeAllPeers])
 
   const sendMessage = useCallback(
-    (text) => {
+    (text: string) => {
       const trimmed = typeof text === 'string' ? text.trim() : ''
       if (!trimmed) return
 

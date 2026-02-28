@@ -1,15 +1,22 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type KeyboardEvent } from 'react'
+import type { RoomFormPayload } from '../types'
+
+interface JoinSectionProps {
+  onJoin: (payload: RoomFormPayload) => void
+  onBack: () => void
+  errorMessage?: string
+}
 
 /**
  * JoinSection – collects room id, username, and passcode for joining.
  * Calls onJoin({ roomId, username, passcode }) when submitted.
  */
-export default function JoinSection({ onJoin, onBack, errorMessage = '' }) {
+export default function JoinSection({ onJoin, onBack, errorMessage = '' }: JoinSectionProps) {
   const [roomId, setRoomId] = useState('')
   const [username, setUsername] = useState('')
   const [passcode, setPasscode] = useState('')
   const [localError, setLocalError] = useState('')
-  const inputRef = useRef(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   function validate() {
     const trimmedRoomId = roomId.trim()
@@ -41,7 +48,7 @@ export default function JoinSection({ onJoin, onBack, errorMessage = '' }) {
     })
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') handleJoin()
   }
 

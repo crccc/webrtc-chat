@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ChatSection from "../src/components/ChatSection.jsx";
+import ChatSection from "../src/components/ChatSection";
 
 beforeAll(() => {
   if (!Element.prototype.scrollIntoView) {
@@ -49,7 +49,7 @@ describe("ChatSection", () => {
       />,
     );
 
-    const input = screen.getByPlaceholderText("Type a message…");
+    const input = screen.getByPlaceholderText("Type a message…") as HTMLInputElement;
     await user.type(input, "  hello  ");
     await user.click(screen.getByText("Send"));
 

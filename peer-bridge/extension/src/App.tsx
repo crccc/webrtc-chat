@@ -5,11 +5,18 @@ import CreateRoomSection from './components/CreateRoomSection'
 import JoinSection from './components/JoinSection'
 import ChatSection from './components/ChatSection'
 import { useWebSocket } from './hooks/useWebSocket'
+import type { AppView, Role, RoomFormPayload } from './types'
 import {
   clearCreatedRoomId,
   getCreatedRoomId,
   setCreatedRoomId,
 } from './utils/storage'
+
+interface SessionState {
+  roomId: string
+  role: Role | null
+  createdRoomId: string | null
+}
 
 /**
  * App – top-level component for the Peer Bridge popup.
@@ -18,13 +25,13 @@ import {
  *   home -> create|join -> chat
  */
 export default function App() {
-  const [view, setView] = useState(() => (getCreatedRoomId() ? 'create' : 'home'))
+  const [view, setView] = useState<AppView>(() => (getCreatedRoomId() ? 'create' : 'home'))
   const [roomId, setRoomId] = useState('')
-  const [role, setRole] = useState(null)
+  const [role, setRole] = useState<Role | null>(null)
   const [createError, setCreateError] = useState('')
   const [joinError, setJoinError] = useState('')
-  const [createdRoomId, setCreatedRoomIdState] = useState(() => getCreatedRoomId())
-  const sessionRef = useRef({ roomId: '', role: null, createdRoomId: null })
+  const [createdRoomId, setCreatedRoomIdState] = useState<string | null>(() => getCreatedRoomId())
+  const sessionRef = useRef<SessionState>({ roomId: '', role: null, createdRoomId: null })
   const { connect, disconnect, sendMessage, messages, peers, capacity, status } = useWebSocket()
 
   useEffect(() => {
@@ -68,18 +75,24 @@ export default function App() {
   useEffect(() => {
     if (view !== 'chat' || status !== 'disconnected') return
 
-    if (role === 'owner' && roomId === createdRoomId) {
-      clearCreatedRoomId()
-      setCreatedRoomIdState(null)
-    }
+    const timer = window.setTimeout(() => {
+      if (role === 'owner' && roomId === createdRoomId) {
+        clearCreatedRoomId()
+        setCreatedRoomIdState(null)
+      }
 
-    setRoomId('')
-    setRole(null)
-    setView('home')
-    sessionRef.current = { roomId: '', role: null, createdRoomId: null }
+      setRoomId('')
+      setRole(null)
+      setView('home')
+      sessionRef.current = { roomId: '', role: null, createdRoomId: null }
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
   }, [status, view, role, roomId, createdRoomId])
 
-  async function handleCreate(payload) {
+  async function handleCreate(payload: RoomFormPayload) {
     setCreateError('')
 
     const result = await connect({ ...payload, flow: 'create' })
@@ -95,7 +108,7 @@ export default function App() {
     setView('chat')
   }
 
-  async function handleJoin(payload) {
+  async function handleJoin(payload: RoomFormPayload) {
     setJoinError('')
 
     const result = await connect({ ...payload, flow: 'join' })
@@ -157,7 +170,7 @@ export default function App() {
         />
       )}
 
-      {view === 'chat' && (
+      {view === 'chat' && role && (
         <ChatSection
           roomId={roomId}
           role={role}

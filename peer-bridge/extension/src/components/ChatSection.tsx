@@ -1,4 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react'
+import type { ChatMessage, Role } from '../types'
+
+interface ChatSectionProps {
+  roomId: string
+  role: Role
+  peers: number
+  capacity: number
+  messages: ChatMessage[]
+  onSend: (text: string) => void
+  onLeave: () => void
+}
 
 /**
  * ChatSection – displays room status, member capacity, message list, and send row.
@@ -11,9 +22,9 @@ export default function ChatSection({
   messages,
   onSend,
   onLeave,
-}) {
+}: ChatSectionProps) {
   const [draft, setDraft] = useState('')
-  const messagesEndRef = useRef(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -26,7 +37,7 @@ export default function ChatSection({
     setDraft('')
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') handleSend()
   }
 
