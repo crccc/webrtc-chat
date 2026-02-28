@@ -71,3 +71,8 @@ npm run typecheck
 ## Protocol
 
 See [docs/protocol.md](docs/protocol.md) for the full message specification.
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for architecture diagrams and
+behavior flow walkthroughs.
