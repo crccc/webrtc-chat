@@ -8,6 +8,7 @@ const connect = vi.fn();
 const disconnect = vi.fn();
 const sendMessage = vi.fn();
 let createdRoomIdStore: string | null = null;
+let signalingServerUrlStore: string | null = null;
 let sessionState = {
   roomId: null as string | null,
   role: null as "owner" | "participant" | null,
@@ -38,6 +39,14 @@ vi.mock("../src/utils/storage", () => ({
   clearCreatedRoomId: vi.fn(async () => {
     createdRoomIdStore = null;
   }),
+  getSignalingServerUrl: vi.fn(async () => signalingServerUrlStore),
+  setSignalingServerUrl: vi.fn(async (url) => {
+    signalingServerUrlStore = typeof url === "string" ? url : null;
+  }),
+}));
+
+vi.mock("../src/config/runtime", () => ({
+  getDefaultDevSignalingUrl: vi.fn(() => "ws://localhost:8888"),
 }));
 
 beforeAll(() => {
@@ -49,6 +58,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   createdRoomIdStore = null;
+  signalingServerUrlStore = null;
   sessionState = {
     roomId: null,
     role: null,
@@ -70,6 +80,20 @@ describe("App phase-3 flow", () => {
 
     expect(screen.getByText("Create Room")).toBeDefined();
     expect(screen.getByText("Join Room")).toBeDefined();
+    expect(screen.getByDisplayValue("ws://localhost:8888")).toBeDefined();
+  });
+
+  it("persists signaling server override from the home screen", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = (await screen.findByLabelText("Signaling Server")) as HTMLInputElement;
+    expect(input.value).toBe("ws://localhost:8888");
+    await user.clear(input);
+    await user.type(input, "ws://192.168.1.128:8888");
+    await user.click(screen.getByText("Save Server"));
+
+    expect(signalingServerUrlStore).toBe("ws://192.168.1.128:8888");
   });
 
   it("handles Create flow and enters chat as owner", async () => {

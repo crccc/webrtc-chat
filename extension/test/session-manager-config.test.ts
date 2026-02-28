@@ -53,6 +53,7 @@ describe("background session manager signaling config", () => {
       flow: "join",
     });
 
+    await Promise.resolve();
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0]?.url).toBe("wss://signal.example.com/ws");
 

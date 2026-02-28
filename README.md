@@ -53,6 +53,9 @@ PEER_BRIDGE_SIGNALING_URL=wss://signal.example.com npm run build
 
 The extension also uses the `storage` permission and persists the created room id in
 `chrome.storage.local`, with a safe `localStorage` fallback for unsupported contexts.
+You can also override the signaling server URL from the Home screen; that value is
+stored in extension storage and takes precedence over the default development endpoint
+for subsequent connect attempts.
 
 ### 3. Load the extension
 

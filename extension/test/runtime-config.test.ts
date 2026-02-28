@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDefaultDevSignalingUrl,
   getSignalingEndpointErrorMessage,
   resolveSignalingEndpoint,
 } from "../src/config/runtime";
@@ -28,7 +29,7 @@ describe("runtime signaling config", () => {
       }),
     ).toEqual({
       ok: true,
-      endpoint: "ws://localhost:8888",
+      endpoint: getDefaultDevSignalingUrl(),
     });
   });
 

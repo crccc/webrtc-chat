@@ -9,8 +9,11 @@ import type { AppView, Role, RoomFormPayload } from './types'
 import {
   clearCreatedRoomId,
   getCreatedRoomId,
+  getSignalingServerUrl,
   setCreatedRoomId,
+  setSignalingServerUrl,
 } from './utils/storage'
+import { getDefaultDevSignalingUrl } from './config/runtime'
 
 interface SessionState {
   roomId: string
@@ -29,6 +32,7 @@ export default function App() {
   const [createError, setCreateError] = useState('')
   const [joinError, setJoinError] = useState('')
   const [createdRoomId, setCreatedRoomIdState] = useState<string | null>(null)
+  const [signalingServerUrl, setSignalingServerUrlState] = useState(getDefaultDevSignalingUrl())
   const sessionRef = useRef<SessionState>({ roomId: '', role: null, createdRoomId: null })
   const { connect, disconnect, sendMessage, roomId, role, messages, peers, capacity, status } =
     useWebSocket()
@@ -53,6 +57,19 @@ export default function App() {
       cancelled = true
     }
   }, [status])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void getSignalingServerUrl().then((storedServerUrl) => {
+      if (cancelled) return
+      setSignalingServerUrlState(storedServerUrl || getDefaultDevSignalingUrl())
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (status === 'connected' && roomId && role) {
@@ -131,12 +148,22 @@ export default function App() {
     sessionRef.current = { roomId: '', role: null, createdRoomId: null }
   }
 
+  async function handleSaveSignalingServerUrl() {
+    await setSignalingServerUrl(signalingServerUrl)
+  }
+
   return (
     <div className="popup-root">
       <h1 className="app-title">Peer Bridge</h1>
 
       {!showChat && view === 'home' && (
-        <HomeSection onCreate={handleOpenCreate} onJoin={handleOpenJoin} />
+        <HomeSection
+          onCreate={handleOpenCreate}
+          onJoin={handleOpenJoin}
+          signalingServerUrl={signalingServerUrl}
+          onSignalingServerUrlChange={setSignalingServerUrlState}
+          onSaveSignalingServerUrl={handleSaveSignalingServerUrl}
+        />
       )}
 
       {!showChat && view === 'create' && (

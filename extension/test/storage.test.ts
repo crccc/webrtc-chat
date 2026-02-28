@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearCreatedRoomId,
+  clearSignalingServerUrl,
   getCreatedRoomId,
+  getSignalingServerUrl,
   setCreatedRoomId,
+  setSignalingServerUrl,
 } from "../src/utils/storage";
 
 type ChromeGlobal = { chrome?: typeof chrome };
@@ -109,5 +112,20 @@ describe("created room storage", () => {
 
     expect(storage.area.set).not.toHaveBeenCalled();
     await expect(getCreatedRoomId()).resolves.toBeNull();
+  });
+
+  it("persists and clears signaling server override", async () => {
+    const storage = createChromeStorageMock();
+    (globalThis as ChromeGlobal).chrome = {
+      storage: {
+        local: storage.area,
+      },
+    } as unknown as typeof chrome;
+
+    await setSignalingServerUrl("ws://192.168.1.128:8888");
+    await expect(getSignalingServerUrl()).resolves.toBe("ws://192.168.1.128:8888");
+
+    await clearSignalingServerUrl();
+    await expect(getSignalingServerUrl()).resolves.toBeNull();
   });
 });

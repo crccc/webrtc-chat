@@ -1,4 +1,5 @@
 const CREATED_ROOM_ID_KEY = 'peer-bridge:created-room-id'
+const SIGNALING_SERVER_URL_KEY = 'peer-bridge:signaling-server-url'
 
 function getChromeStorageArea(): chrome.storage.StorageArea | null {
   try {
@@ -78,6 +79,71 @@ export async function clearCreatedRoomId(): Promise<void> {
 
   try {
     getLocalStorage()?.removeItem(CREATED_ROOM_ID_KEY)
+  } catch {
+    // Ignore storage cleanup failures in restricted environments.
+  }
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+export async function getSignalingServerUrl(): Promise<string | null> {
+  const storage = getChromeStorageArea()
+  if (storage) {
+    try {
+      const result = await storage.get(SIGNALING_SERVER_URL_KEY)
+      return normalizeOptionalString(result?.[SIGNALING_SERVER_URL_KEY])
+    } catch (error) {
+      console.warn('[peer-bridge] failed to read signaling server url from chrome storage', error)
+    }
+  }
+
+  try {
+    const fallbackStorage = getLocalStorage()
+    return normalizeOptionalString(fallbackStorage?.getItem(SIGNALING_SERVER_URL_KEY))
+  } catch {
+    return null
+  }
+}
+
+export async function setSignalingServerUrl(url: string): Promise<void> {
+  const normalizedUrl = normalizeOptionalString(url)
+  if (!normalizedUrl) {
+    await clearSignalingServerUrl()
+    return
+  }
+
+  const storage = getChromeStorageArea()
+  if (storage) {
+    try {
+      await storage.set({ [SIGNALING_SERVER_URL_KEY]: normalizedUrl })
+      return
+    } catch (error) {
+      console.warn('[peer-bridge] failed to write signaling server url to chrome storage', error)
+    }
+  }
+
+  try {
+    getLocalStorage()?.setItem(SIGNALING_SERVER_URL_KEY, normalizedUrl)
+  } catch {
+    // Ignore storage write failures in restricted environments.
+  }
+}
+
+export async function clearSignalingServerUrl(): Promise<void> {
+  const storage = getChromeStorageArea()
+  if (storage) {
+    try {
+      await storage.remove(SIGNALING_SERVER_URL_KEY)
+      return
+    } catch (error) {
+      console.warn('[peer-bridge] failed to clear signaling server url from chrome storage', error)
+    }
+  }
+
+  try {
+    getLocalStorage()?.removeItem(SIGNALING_SERVER_URL_KEY)
   } catch {
     // Ignore storage cleanup failures in restricted environments.
   }

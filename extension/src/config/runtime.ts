@@ -1,4 +1,4 @@
-const DEFAULT_DEV_SIGNALING_URL = "ws://localhost:8888";
+const DEFAULT_DEV_SIGNALING_URL = "ws://192.168.1.128:8888";
 
 export interface RuntimeEnvShape {
   PEER_BRIDGE_SIGNALING_URL?: string;
@@ -67,4 +67,8 @@ export function resolveSignalingEndpoint(
     code: "MISSING_SIGNALING_URL",
     message: getSignalingEndpointErrorMessage("MISSING_SIGNALING_URL"),
   };
+}
+
+export function getDefaultDevSignalingUrl(): string {
+  return DEFAULT_DEV_SIGNALING_URL;
 }

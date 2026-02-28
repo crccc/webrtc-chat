@@ -1,5 +1,10 @@
 import { getIceConfiguration } from "../webrtc/iceConfig";
-import { resolveSignalingEndpoint, type SignalingEndpointResolution } from "../config/runtime";
+import {
+  resolveSignalingEndpoint,
+  type RuntimeEnvShape,
+  type SignalingEndpointResolution,
+} from "../config/runtime";
+import { getSignalingServerUrl } from "../utils/storage";
 import type {
   BackgroundSessionSnapshot,
   ChatMessage,
@@ -145,14 +150,14 @@ export interface BackgroundSessionManager {
 }
 
 interface BackgroundSessionManagerOptions {
-  endpointResolver?: () => SignalingEndpointResolution;
+  endpointResolver?: (env?: RuntimeEnvShape) => SignalingEndpointResolution;
   webSocketFactory?: (url: string) => WebSocket;
 }
 
 export function createBackgroundSessionManager(
   options: BackgroundSessionManagerOptions = {},
 ): BackgroundSessionManager {
-  const endpointResolver = options.endpointResolver ?? (() => resolveSignalingEndpoint());
+  const endpointResolver = options.endpointResolver ?? ((env?: RuntimeEnvShape) => resolveSignalingEndpoint(env));
   const webSocketFactory = options.webSocketFactory ?? ((url: string) => new WebSocket(url));
   let snapshot = getDefaultSessionSnapshot();
   let socket: WebSocket | null = null;
@@ -384,7 +389,11 @@ export function createBackgroundSessionManager(
       username = nextUsername;
       peerId = "";
 
-      const endpoint = endpointResolver();
+      const signalingServerOverride = await getSignalingServerUrl();
+      const endpoint = endpointResolver({
+        ...import.meta.env,
+        PEER_BRIDGE_SIGNALING_URL: signalingServerOverride ?? import.meta.env.PEER_BRIDGE_SIGNALING_URL,
+      });
       if (!endpoint.ok) {
         const failure = {
           ok: false,
