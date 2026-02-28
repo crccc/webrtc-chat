@@ -12,6 +12,8 @@ import type {
   Role,
 } from "../types";
 const ROOM_CAPACITY = 8;
+const CONNECTION_ERROR_MESSAGE =
+  "Connection error. Check that the signaling server is reachable and that LAN or Local Network access is allowed.";
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_ROOM_ID: "Room ID must be a valid UUIDv4.",
@@ -531,7 +533,7 @@ export function createBackgroundSessionManager(
           peerId = "";
           const failure = {
             ok: false,
-            message: "Connection error. Is the server running?",
+            message: CONNECTION_ERROR_MESSAGE,
           } satisfies ConnectFailureResult;
           setSnapshot((current) => ({
             ...current,

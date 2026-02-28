@@ -60,7 +60,8 @@ describe("background session manager signaling config", () => {
 
     await expect(connectPromise).resolves.toEqual({
       ok: false,
-      message: "Connection error. Is the server running?",
+      message:
+        "Connection error. Check that the signaling server is reachable and that LAN or Local Network access is allowed.",
     });
   });
 
