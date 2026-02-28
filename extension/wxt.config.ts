@@ -2,6 +2,9 @@ import { defineConfig } from 'wxt'
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  webExt: {
+    disabled: true,
+  },
   manifest: {
     name: 'Peer Bridge',
     version: '0.0.0',
