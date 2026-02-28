@@ -8,16 +8,16 @@ together, and what objects/components are involved in each major behavior.
 ```mermaid
 flowchart LR
   User[User]
-  BG[WXT Background\nentrypoints/background.ts]
-  SP[Sidepanel Entry\nentrypoints/sidepanel/main.tsx]
-  App[React App\nsrc/App.tsx]
-  Hook[Realtime Hook\nsrc/hooks/useWebSocket.ts]
-  Store[Local Storage\nsrc/utils/storage.ts]
-  UUID[UUID Helper\nsrc/utils/uuid.ts]
-  ICE[ICE Config\nsrc/webrtc/iceConfig.ts]
-  WS[WebSocket Signaling\nws://localhost:8888]
-  Server[Node Signaling Server\nserver/index.js]
-  RTC[RTCPeerConnection Map\npeersRef]
+  BG[WXT Background<br/>entrypoints/background.ts]
+  SP[Sidepanel Entry<br/>entrypoints/sidepanel/main.tsx]
+  App[React App<br/>src/App.tsx]
+  Hook[Realtime Hook<br/>src/hooks/useWebSocket.ts]
+  Store[Local Storage<br/>src/utils/storage.ts]
+  UUID[UUID Helper<br/>src/utils/uuid.ts]
+  ICE[ICE Config<br/>src/webrtc/iceConfig.ts]
+  WS[WebSocket Signaling<br/>ws://localhost:8888]
+  Server[Node Signaling Server<br/>server/index.js]
+  RTC[RTCPeerConnection Map<br/>peersRef]
   DC[RTCDataChannel chat]
   Peer[Other Extension Instance]
 
@@ -39,14 +39,14 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Background[background.ts\nOpens sidepanel]
-  Sidepanel[sidepanel/main.tsx\nMounts React root]
-  App[App.tsx\nView + session state]
+  Background[background.ts<br/>Opens sidepanel]
+  Sidepanel[sidepanel/main.tsx<br/>Mounts React root]
+  App[App.tsx<br/>View + session state]
   Create[CreateRoomSection.tsx]
   Join[JoinSection.tsx]
   Home[HomeSection.tsx]
   Chat[ChatSection.tsx]
-  Hook[useWebSocket.ts\nSignaling + WebRTC orchestration]
+  Hook[useWebSocket.ts<br/>Signaling + WebRTC orchestration]
 
   Background --> Sidepanel
   Sidepanel --> App
