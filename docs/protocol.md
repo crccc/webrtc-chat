@@ -4,6 +4,10 @@ This document describes the signaling protocol between extension clients and the
 Node.js signaling server. Chat text payloads are sent through WebRTC DataChannels,
 not through WebSocket `message` broadcasts.
 
+This document covers only the external client/server signaling protocol. The
+extension's internal background-to-offscreen runtime bridge is an implementation
+detail and is documented in [architecture.md](architecture.md).
+
 All signaling frames are JSON objects sent over WebSocket text frames.
 
 ## Client -> Server

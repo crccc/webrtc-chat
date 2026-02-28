@@ -16,11 +16,14 @@ flowchart LR
   Runtime[Runtime Config<br/>src/config/runtime.ts]
   Bootstrap[Background Bootstrap<br/>src/session/backgroundRuntime.ts]
   Session[Background Session Manager<br/>src/session/sessionManager.ts]
+  Bridge[Offscreen RTC Bridge<br/>src/session/offscreenBridge.ts]
+  Offscreen[Offscreen RTC Runtime<br/>src/offscreen/main.ts]
+  PeerMgr[RTC Peer Manager<br/>src/session/rtcPeerManager.ts]
   UUID[UUID Helper<br/>src/utils/uuid.ts]
-  ICE[ICE Config<br/>src/webrtc/iceConfig.ts]
   WS[WebSocket Signaling<br/>resolved ws/wss endpoint]
   Server[Node Signaling Server<br/>server/index.js]
-  RTC[RTCPeerConnection Map<br/>background-owned]
+  OffscreenDoc[chrome.offscreen document]
+  RTC[RTCPeerConnection Map<br/>offscreen-owned]
   DC[RTCDataChannel chat]
   Peer[Other Extension Instance]
 
@@ -34,10 +37,13 @@ flowchart LR
   BG --> Bootstrap
   Bootstrap --> Runtime
   Bootstrap --> Session
-  Session --> ICE
+  Session --> Bridge
   Session --> WS
+  Bridge --> OffscreenDoc
+  OffscreenDoc --> Offscreen
+  Offscreen --> PeerMgr
   WS --> Server
-  Session --> RTC
+  PeerMgr --> RTC
   RTC --> DC
   DC --> Peer
 ```
@@ -58,7 +64,10 @@ flowchart TD
   Chat[ChatSection.tsx]
   Hook[useWebSocket.ts<br/>Runtime messaging client]
   Bootstrap[backgroundRuntime.ts<br/>Registers runtime listeners]
-  Session[sessionManager.ts<br/>Signaling + WebRTC orchestration]
+  Session[sessionManager.ts<br/>Signaling + snapshot orchestration]
+  Bridge[offscreenBridge.ts<br/>Ensures offscreen document + runtime bridge]
+  Offscreen[offscreen/main.ts<br/>Receives RTC commands]
+  PeerMgr[rtcPeerManager.ts<br/>Owns RTCPeerConnection + RTCDataChannel]
 
   Background --> Sidepanel
   Sidepanel --> App
@@ -69,6 +78,9 @@ flowchart TD
   App --> Hook
   Background --> Bootstrap
   Bootstrap --> Session
+  Session --> Bridge
+  Bridge --> Offscreen
+  Offscreen --> PeerMgr
   Hook --> Bootstrap
 ```
 
@@ -83,8 +95,10 @@ flowchart TD
 | `setupBackgroundRuntime` | `src/session/backgroundRuntime.ts` | Wires Chrome runtime events and messaging to the background session controller |
 | `socket` | `src/session/sessionManager.ts` | Active signaling WebSocket owned by background |
 | `peerId` | `src/session/sessionManager.ts` | Local peer id assigned by server |
-| `peers` | `src/session/sessionManager.ts` | `Map<peerId, { pc, dc }>` for all remote peers |
 | `messages` | `src/session/sessionManager.ts` | Chat timeline broadcast back to the sidepanel |
+| `createChromeOffscreenRtcBridge` | `src/session/offscreenBridge.ts` | Creates/targets the offscreen document and relays RTC commands/events |
+| `rtcManager` | `src/offscreen/main.ts` | Offscreen-owned WebRTC runtime instance |
+| `peers` | `src/session/rtcPeerManager.ts` | `Map<peerId, { pc, dc }>` for all remote peers |
 | `resolveSignalingEndpoint` | `src/config/runtime.ts` | Resolves env-backed websocket endpoint |
 | `rooms` | `server/index.js` | Server-side room registry |
 | `peersById` | `server/index.js` | Server-side lookup from `peerId` to socket |
@@ -113,13 +127,17 @@ This is the part that answers:
 - Which peer should I negotiate with?
 - How do I reach the remote peer's signaling endpoint?
 
-### Data Plane: peer-to-peer WebRTC
+### Data Plane: peer-to-peer WebRTC in offscreen document
 
 Once negotiation succeeds, the peers talk directly over WebRTC:
 
 - Chat text over `RTCDataChannel`
 - Future audio/video media tracks
 - Future peer-to-peer collaborative events
+
+In Manifest V3, Peer Bridge does not run this layer inside the background service
+worker. The background owns signaling and session state, while the offscreen
+document owns `RTCPeerConnection` and `RTCDataChannel`.
 
 This is the part that answers:
 
@@ -174,6 +192,8 @@ sequenceDiagram
   participant Hook as useWebSocket.ts
   participant BG as background.ts
   participant Session as sessionManager.ts
+  participant Bridge as offscreenBridge.ts
+  participant Offscreen as offscreen/main.ts
   participant WS as WebSocket
   participant S as server/index.js
 
@@ -181,11 +201,14 @@ sequenceDiagram
   UI->>Hook: connect({ roomId, username, passcode, flow })
   Hook->>BG: chrome.runtime.sendMessage(connect)
   BG->>Session: connect(...)
+  Session->>Bridge: ensureReady()
+  Bridge->>Offscreen: create/target offscreen doc
   Session->>WS: open resolved ws/wss endpoint
   WS->>S: { action:"join", ... }
   S->>S: Validate room/passcode/capacity
   S-->>WS: { type:"joined", peerId, peerList, peers, capacity }
   WS-->>Session: joined payload
+  Session->>Bridge: resetSession(peerId, username)
   Session->>BG: publish snapshot update
   BG-->>Hook: runtime state message
   BG-->>Hook: connect response
@@ -198,25 +221,28 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant A as Extension A Background Session
+  participant OA as Extension A Offscreen RTC
   participant S as Signaling Server
   participant B as Extension B Background Session
+  participant OB as Extension B Offscreen RTC
 
   B->>S: join room
   S-->>B: joined(peerId, peerList=[A])
   S-->>A: signal.joined(peerId=B)
 
-  Note over A,B: Deterministic offerer rule: smaller peerId initiates
+  Note over OA,OB: Deterministic offerer rule: smaller peerId initiates
 
-  A->>A: ensurePeerConnection(B, initiator=true)
-  A->>S: offer(to=B, payload=localDescription)
+  A->>OA: peerJoined(B)
+  OA->>S: signal request via background bridge
   S-->>B: offer(from=A, payload)
-  B->>B: setRemoteDescription(offer)
-  B->>B: createAnswer()
-  B->>S: answer(to=A, payload=localDescription)
+  B->>OB: forward offer from background
+  OB->>OB: setRemoteDescription(offer)
+  OB->>OB: createAnswer()
+  OB->>S: signal request via background bridge
   S-->>A: answer(from=B, payload)
-  A->>A: setRemoteDescription(answer)
-  A->>S: ice(...)
-  B->>S: ice(...)
+  A->>OA: forward answer from background
+  OA->>S: ice(...)
+  OB->>S: ice(...)
 ```
 
 ## Flow: Send Chat Message
@@ -228,6 +254,8 @@ sequenceDiagram
   participant Hook as useWebSocket.ts
   participant BG as background.ts
   participant Session as sessionManager.ts
+  participant Bridge as offscreenBridge.ts
+  participant Offscreen as offscreen/main.ts
   participant DC as RTCDataChannel
   participant Peer as Remote Extension
 
@@ -235,7 +263,9 @@ sequenceDiagram
   Chat->>Hook: onSend(trimmedText)
   Hook->>BG: chrome.runtime.sendMessage(send)
   BG->>Session: sendMessage(trimmedText)
-  Session->>DC: dc.send({ type:"chat", from, text })
+  Session->>Bridge: sendMessage(trimmedText)
+  Bridge->>Offscreen: send command
+  Offscreen->>DC: dc.send({ type:"chat", from, text })
   DC-->>Peer: DataChannel payload
   Peer->>Peer: decodeChannelMessage()
   Peer->>Peer: append incoming chat to messages
@@ -248,9 +278,10 @@ sequenceDiagram
   participant SP as Sidepanel
   participant BG as background.ts
   participant Session as sessionManager.ts
+  participant Offscreen as offscreen/main.ts
 
   SP-xBG: Sidepanel closes
-  Note over BG,Session: Background session remains active
+  Note over BG,Offscreen: Background + offscreen session remain active
   SP->>BG: Sidepanel reopens and requests status
   BG->>Session: getSnapshot()
   BG-->>SP: current session snapshot

@@ -4,7 +4,9 @@
 Two (or more) instances of the extension join the same room, negotiate peer links
 over a lightweight WebSocket signaling server, and exchange chat messages over WebRTC DataChannels.
 The extension keeps room/session ownership in the Manifest V3 background service worker,
-so sidepanel close/reopen does not drop an active session by itself.
+while the actual WebRTC peer connections run inside an offscreen document. That split
+keeps sidepanel close/reopen from dropping an active session by itself without trying
+to run `RTCPeerConnection` inside the MV3 service worker.
 
 ---
 
@@ -15,8 +17,8 @@ webrtc-chat/
   extension/       # Chrome Extension (Manifest V3) + WXT + React
     package.json
     wxt.config.ts
-    entrypoints/   # background + sidepanel entrypoints
-    src/           # React source
+    entrypoints/   # background + sidepanel + offscreen document entrypoints
+    src/           # React source + offscreen/runtime/session modules
     .output/       # WXT build output (git-ignored)
   server/          # Node.js WebSocket signaling server
   docs/            # Protocol documentation
@@ -51,7 +53,7 @@ cd extension
 PEER_BRIDGE_SIGNALING_URL=wss://signal.example.com npm run build
 ```
 
-The extension also uses the `storage` permission and persists the created room id in
+The extension uses the `offscreen`, `sidePanel`, and `storage` permissions. It persists the created room id in
 `chrome.storage.local`, with a safe `localStorage` fallback for unsupported contexts.
 You can also override the signaling server URL from the Home screen; that value is
 stored in extension storage and takes precedence over the default development endpoint
@@ -91,8 +93,10 @@ See [docs/protocol.md](docs/protocol.md) for the full message specification.
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for architecture diagrams and
-behavior flow walkthroughs, including the extracted background bootstrap layer in
-`src/session/backgroundRuntime.ts`.
+behavior flow walkthroughs, including the background bootstrap layer in
+`src/session/backgroundRuntime.ts`, the offscreen RTC bridge in
+`src/session/offscreenBridge.ts`, and the offscreen WebRTC runtime in
+`src/offscreen/main.ts`.
 
 ## Manual Smoke
 

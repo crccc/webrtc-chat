@@ -1,10 +1,14 @@
-import { getIceConfiguration } from "../webrtc/iceConfig";
 import {
   resolveSignalingEndpoint,
   type RuntimeEnvShape,
   type SignalingEndpointResolution,
 } from "../config/runtime";
 import { getSignalingServerUrl } from "../utils/storage";
+import {
+  createChromeOffscreenRtcBridge,
+  type BackgroundRtcBridge,
+} from "./offscreenBridge";
+import type { OffscreenEventMessage, RtcSignalAction } from "./offscreenProtocol";
 import type {
   BackgroundSessionSnapshot,
   ChatMessage,
@@ -16,6 +20,7 @@ import type {
   MessageType,
   Role,
 } from "../types";
+
 const ROOM_CAPACITY = 8;
 const CONNECTION_ERROR_MESSAGE =
   "Connection error. Check that the signaling server is reachable and that LAN or Local Network access is allowed.";
@@ -34,12 +39,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   ROOM_CLOSED: "Room was closed.",
 };
 
-interface PeerConnectionEntry {
-  pc: RTCPeerConnection;
-  dc: RTCDataChannel | null;
-}
-
-interface ParsedChannelMessage {
+export interface ParsedChannelMessage {
   from: string;
   text: string;
 }
@@ -152,19 +152,26 @@ export interface BackgroundSessionManager {
 interface BackgroundSessionManagerOptions {
   endpointResolver?: (env?: RuntimeEnvShape) => SignalingEndpointResolution;
   webSocketFactory?: (url: string) => WebSocket;
+  rtcBridge?: BackgroundRtcBridge;
 }
 
 export function createBackgroundSessionManager(
   options: BackgroundSessionManagerOptions = {},
 ): BackgroundSessionManager {
-  const endpointResolver = options.endpointResolver ?? ((env?: RuntimeEnvShape) => resolveSignalingEndpoint(env));
+  const endpointResolver =
+    options.endpointResolver ?? ((env?: RuntimeEnvShape) => resolveSignalingEndpoint(env));
   const webSocketFactory = options.webSocketFactory ?? ((url: string) => new WebSocket(url));
   let snapshot = getDefaultSessionSnapshot();
   let socket: WebSocket | null = null;
-  let username = "";
   let peerId = "";
-  const peers = new Map<string, PeerConnectionEntry>();
   const listeners = new Set<(snapshot: BackgroundSessionSnapshot) => void>();
+
+  const rtcBridge =
+    options.rtcBridge ??
+    createChromeOffscreenRtcBridge({
+      chromeApi: chrome,
+      onEvent: handleRtcBridgeEvent,
+    });
 
   function notify() {
     const nextSnapshot = {
@@ -199,7 +206,7 @@ export function createBackgroundSessionManager(
   }
 
   function sendSignal(
-    action: "offer" | "answer" | "ice",
+    action: RtcSignalAction,
     to: string,
     payload: RTCSessionDescriptionInit | RTCIceCandidateInit,
   ) {
@@ -207,153 +214,59 @@ export function createBackgroundSessionManager(
     socket.send(JSON.stringify({ action, to, payload }));
   }
 
-  function closePeer(remotePeerId: string) {
-    const entry = peers.get(remotePeerId);
-    if (!entry) return;
-    try {
-      entry.dc?.close();
-    } catch {
-      // Ignore close failures.
-    }
-    try {
-      entry.pc.close();
-    } catch {
-      // Ignore close failures.
-    }
-    peers.delete(remotePeerId);
-  }
-
-  function closeAllPeers() {
-    for (const remotePeerId of peers.keys()) {
-      closePeer(remotePeerId);
-    }
-    peers.clear();
-  }
-
-  function setupDataChannel(remotePeerId: string, dc: RTCDataChannel) {
-    const existing = peers.get(remotePeerId);
-    if (!existing) return;
-    existing.dc = dc;
-    dc.onmessage = (event) => {
-      const parsed = decodeChannelMessage(event.data, remotePeerId);
-      if (!parsed) return;
-      addMessage(`Peer (${parsed.from}): ${parsed.text}`, "peer");
-    };
-    dc.onerror = () => {
-      // Keep channel errors non-fatal for other peers.
-    };
-  }
-
-  function ensurePeerConnection(
-    remotePeerId: string,
-    options: { initiator: boolean },
-  ): PeerConnectionEntry | null {
-    if (!remotePeerId || remotePeerId === peerId) return null;
-
-    const existing = peers.get(remotePeerId);
-    if (existing) return existing;
-
-    if (typeof RTCPeerConnection !== "function") {
-      return null;
-    }
-
-    const pc = new RTCPeerConnection(getIceConfiguration());
-    const entry: PeerConnectionEntry = { pc, dc: null };
-    peers.set(remotePeerId, entry);
-
-    pc.onicecandidate = (event) => {
-      if (!event.candidate) return;
-      sendSignal("ice", remotePeerId, event.candidate.toJSON());
-    };
-
-    pc.ondatachannel = (event) => {
-      setupDataChannel(remotePeerId, event.channel);
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-        closePeer(remotePeerId);
-      }
-    };
-
-    if (options.initiator) {
-      const dc = pc.createDataChannel("chat", { ordered: true });
-      setupDataChannel(remotePeerId, dc);
-    }
-
-    return entry;
-  }
-
-  async function createAndSendOffer(remotePeerId: string) {
-    const entry = ensurePeerConnection(remotePeerId, { initiator: true });
-    if (!entry) return;
-    try {
-      const offer = await entry.pc.createOffer();
-      await entry.pc.setLocalDescription(offer);
-      sendSignal("offer", remotePeerId, entry.pc.localDescription ?? offer);
-    } catch (error) {
-      console.warn("[peer-bridge] offer negotiation failed", error);
+  function handleRtcBridgeEvent(event: OffscreenEventMessage) {
+    switch (event.action) {
+      case "signal":
+        sendSignal(event.payload.action, event.payload.to, event.payload.payload);
+        break;
+      case "received":
+        addMessage(`Peer (${event.payload.from}): ${event.payload.text}`, "peer");
+        break;
+      case "diagnostic":
+        if (event.payload.code === "RTC_UNAVAILABLE") {
+          addMessage(
+            "⚠ WebRTC is unavailable in the extension offscreen runtime. Peer chat cannot start.",
+            "info",
+          );
+        }
+        break;
     }
   }
 
   function onPeerJoined(remotePeerId?: string) {
     if (!remotePeerId || remotePeerId === peerId) return;
-    if (shouldInitiateOffer(peerId, remotePeerId)) {
-      void createAndSendOffer(remotePeerId);
-      return;
-    }
-    ensurePeerConnection(remotePeerId, { initiator: false });
+    void rtcBridge.peerJoined(remotePeerId).catch((error) => {
+      console.warn("[peer-bridge] failed to notify offscreen peer join", error);
+    });
   }
 
   function onPeerLeft(remotePeerId?: string) {
     if (!remotePeerId) return;
-    closePeer(remotePeerId);
+    void rtcBridge.peerLeft(remotePeerId).catch((error) => {
+      console.warn("[peer-bridge] failed to notify offscreen peer leave", error);
+    });
   }
 
-  async function onSignalOffer(msg: RelayServerMessage) {
+  function onRelaySignal(msg: RelayServerMessage) {
     const remotePeerId = typeof msg.from === "string" ? msg.from : "";
     const payload = msg.payload;
-    if (!remotePeerId || !payload) return;
+    if (!remotePeerId || !payload || !msg.type) return;
 
-    try {
-      const entry = ensurePeerConnection(remotePeerId, { initiator: false });
-      if (!entry) return;
-      await entry.pc.setRemoteDescription(payload as RTCSessionDescriptionInit);
-      const answer = await entry.pc.createAnswer();
-      await entry.pc.setLocalDescription(answer);
-      sendSignal("answer", remotePeerId, entry.pc.localDescription ?? answer);
-    } catch (error) {
-      console.warn("[peer-bridge] failed to handle offer", error);
-    }
+    void rtcBridge
+      .receiveSignal({
+        action: msg.type,
+        from: remotePeerId,
+        payload,
+      })
+      .catch((error) => {
+        console.warn(`[peer-bridge] failed to forward ${msg.type} to offscreen`, error);
+      });
   }
 
-  async function onSignalAnswer(msg: RelayServerMessage) {
-    const remotePeerId = typeof msg.from === "string" ? msg.from : "";
-    const payload = msg.payload;
-    if (!remotePeerId || !payload) return;
-    const entry = peers.get(remotePeerId);
-    if (!entry) return;
-    try {
-      await entry.pc.setRemoteDescription(payload as RTCSessionDescriptionInit);
-    } catch (error) {
-      console.warn("[peer-bridge] failed to handle answer", error);
-    }
-  }
-
-  async function onSignalIce(msg: RelayServerMessage) {
-    const remotePeerId = typeof msg.from === "string" ? msg.from : "";
-    const payload = msg.payload;
-    if (!remotePeerId || !payload) return;
-    const entry = peers.get(remotePeerId);
-    if (!entry) return;
-    try {
-      await entry.pc.addIceCandidate(payload as RTCIceCandidateInit);
-    } catch (error) {
-      console.warn("[peer-bridge] failed to add ice candidate", error);
-    }
-  }
-
-  function resetSessionState(status: ConnectionStatus = "idle", error: ConnectFailureResult | null = null) {
+  function resetSessionState(
+    status: ConnectionStatus = "idle",
+    error: ConnectFailureResult | null = null,
+  ) {
     setSnapshot({
       ...getDefaultSessionSnapshot(),
       status,
@@ -375,7 +288,9 @@ export function createBackgroundSessionManager(
       if (socket) {
         socket.close(1000, "REPLACED_SESSION");
       }
-      closeAllPeers();
+      await rtcBridge.disconnect().catch(() => {
+        // Ignore offscreen teardown failures while reconnecting.
+      });
 
       setSnapshot({
         roomId,
@@ -386,18 +301,34 @@ export function createBackgroundSessionManager(
         capacity: ROOM_CAPACITY,
         error: null,
       });
-      username = nextUsername;
       peerId = "";
 
       const signalingServerOverride = await getSignalingServerUrl();
       const endpoint = endpointResolver({
         ...import.meta.env,
-        PEER_BRIDGE_SIGNALING_URL: signalingServerOverride ?? import.meta.env.PEER_BRIDGE_SIGNALING_URL,
+        PEER_BRIDGE_SIGNALING_URL:
+          signalingServerOverride ?? import.meta.env.PEER_BRIDGE_SIGNALING_URL,
       });
       if (!endpoint.ok) {
         const failure = {
           ok: false,
           message: endpoint.message,
+        } satisfies ConnectFailureResult;
+        setSnapshot((current) => ({
+          ...current,
+          status: "error",
+          error: failure,
+        }));
+        return failure;
+      }
+
+      try {
+        await rtcBridge.ensureReady();
+      } catch (error) {
+        console.error("[peer-bridge] failed to initialize offscreen runtime", error);
+        const failure = {
+          ok: false,
+          message: "Failed to initialize the offscreen WebRTC runtime.",
         } satisfies ConnectFailureResult;
         setSnapshot((current) => ({
           ...current,
@@ -451,15 +382,31 @@ export function createBackgroundSessionManager(
                   error: null,
                 }));
                 if (flow === "create") {
-                  addMessage(`✓ Created room "${joinedMsg.room}" as ${joinedMsg.username}.`, "info");
+                  addMessage(
+                    `✓ Created room "${joinedMsg.room}" as ${joinedMsg.username}.`,
+                    "info",
+                  );
                 } else {
-                  addMessage(`✓ Joined room "${joinedMsg.room}" as ${joinedMsg.username}.`, "info");
+                  addMessage(
+                    `✓ Joined room "${joinedMsg.room}" as ${joinedMsg.username}.`,
+                    "info",
+                  );
                 }
-                if (Array.isArray(joinedMsg.peerList)) {
-                  for (const remotePeerId of joinedMsg.peerList) {
-                    onPeerJoined(remotePeerId);
-                  }
-                }
+                void rtcBridge
+                  .resetSession({
+                    peerId,
+                    username: joinedMsg.username,
+                  })
+                  .then(() => {
+                    if (Array.isArray(joinedMsg.peerList)) {
+                      for (const remotePeerId of joinedMsg.peerList) {
+                        onPeerJoined(remotePeerId);
+                      }
+                    }
+                  })
+                  .catch((error) => {
+                    console.warn("[peer-bridge] failed to reset offscreen session", error);
+                  });
                 resolveOnce({ ok: true });
                 break;
               }
@@ -477,13 +424,9 @@ export function createBackgroundSessionManager(
                 }));
                 break;
               case "offer":
-                void onSignalOffer(msg as RelayServerMessage);
-                break;
               case "answer":
-                void onSignalAnswer(msg as RelayServerMessage);
-                break;
               case "ice":
-                void onSignalIce(msg as RelayServerMessage);
+                onRelaySignal(msg as RelayServerMessage);
                 break;
               case "error": {
                 const failure = {
@@ -509,7 +452,9 @@ export function createBackgroundSessionManager(
         });
 
         ws.addEventListener("close", () => {
-          closeAllPeers();
+          void rtcBridge.disconnect().catch(() => {
+            // Ignore offscreen teardown failures on close.
+          });
           socket = null;
           peerId = "";
           if (!settled) {
@@ -537,7 +482,9 @@ export function createBackgroundSessionManager(
         });
 
         ws.addEventListener("error", () => {
-          closeAllPeers();
+          void rtcBridge.disconnect().catch(() => {
+            // Ignore offscreen teardown failures on error.
+          });
           socket = null;
           peerId = "";
           const failure = {
@@ -555,10 +502,11 @@ export function createBackgroundSessionManager(
     },
 
     disconnect() {
-      closeAllPeers();
+      void rtcBridge.disconnect().catch(() => {
+        // Ignore offscreen teardown failures during explicit disconnect.
+      });
       socket?.close();
       socket = null;
-      username = "";
       peerId = "";
       resetSessionState();
     },
@@ -567,27 +515,33 @@ export function createBackgroundSessionManager(
       const trimmed = typeof text === "string" ? text.trim() : "";
       if (!trimmed) return;
 
-      let sent = false;
-      const payload = JSON.stringify({
-        type: "chat",
-        from: username || peerId || "peer",
-        text: trimmed,
-      });
+      void rtcBridge
+        .sendMessage(trimmed)
+        .then((result) => {
+          if (result.sent) {
+            addMessage(`You: ${trimmed}`, "self");
+            return;
+          }
 
-      for (const entry of peers.values()) {
-        const dc = entry.dc;
-        if (!dc || dc.readyState !== "open") continue;
-        try {
-          dc.send(payload);
-          sent = true;
-        } catch (error) {
-          console.warn("[peer-bridge] data channel send failed", error);
-        }
-      }
+          if (result.reason === "rtc-unavailable") {
+            addMessage(
+              "⚠ WebRTC is unavailable in the extension offscreen runtime. Peer chat cannot start.",
+              "info",
+            );
+            return;
+          }
 
-      if (sent) {
-        addMessage(`You: ${trimmed}`, "self");
-      }
+          if (result.reason === "no-peers") {
+            addMessage("⚠ No peers are connected yet.", "info");
+            return;
+          }
+
+          addMessage("⚠ Peer channel is not open yet. Wait a moment and try again.", "info");
+        })
+        .catch((error) => {
+          console.warn("[peer-bridge] failed to send message via offscreen runtime", error);
+          addMessage("⚠ Failed to send message.", "info");
+        });
     },
 
     getSnapshot() {
