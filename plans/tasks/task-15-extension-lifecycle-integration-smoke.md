@@ -51,4 +51,5 @@
 
 ## Dependencies / Notes
 - Depends on availability of stable session and messaging boundaries from Task 12.
-- Should update `extension/test/smoke.test.js` and add focused integration files rather than one monolithic test.
+- Should update `extension/test/smoke.test.ts` and add focused integration files rather than one monolithic test.
+- Test harness should reflect the current WXT + TypeScript entrypoints (`extension/entrypoints/background.ts`, `extension/entrypoints/sidepanel/main.tsx`).

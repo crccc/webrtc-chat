@@ -5,7 +5,7 @@
 
 ## In Scope
 - Replace storage utility implementation with `chrome.storage.local` (or session/local strategy chosen during implementation).
-- Keep existing API semantics (`getCreatedRoomId`, `setCreatedRoomId`, `clearCreatedRoomId`) or introduce minimal compatible async migration path.
+- Keep existing API semantics (`getCreatedRoomId`, `setCreatedRoomId`, `clearCreatedRoomId`) only if they remain technically sound; otherwise introduce an explicit async migration path and update all call sites.
 - Handle initialization/read timing in sidepanel flow without regressions.
 - Add tests for storage reads/writes/clear and fallback behavior in restricted test environments.
 
@@ -50,6 +50,6 @@
 - Completion log entry appended.
 
 ## Dependencies / Notes
-- Primary files: `extension/src/utils/storage.js`, `extension/src/App.jsx`, and affected tests.
+- Primary files: `extension/src/utils/storage.ts`, `extension/src/App.tsx`, and affected tests.
+- Current implementation is TypeScript and currently reads synchronously; this task must explicitly account for the sync-to-async migration impact on initialization flow.
 - Align with Task 12 if session ownership moves to background and requires cross-context storage use.
-

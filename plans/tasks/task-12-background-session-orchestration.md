@@ -50,5 +50,6 @@
 - Completion log entry appended.
 
 ## Dependencies / Notes
-- Depends on current `entrypoints/background.ts`, `src/hooks/useWebSocket.js`, and `src/App.jsx` split of responsibilities.
+- Depends on current `extension/entrypoints/background.ts`, `extension/src/hooks/useWebSocket.ts`, and `extension/src/App.tsx` split of responsibilities.
+- Runtime messaging should align with the current WXT service worker model and TypeScript payload contracts in `extension/src/types.ts`.
 - Must be completed before adding lifecycle-focused integration smoke coverage.

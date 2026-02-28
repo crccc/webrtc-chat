@@ -8,16 +8,21 @@ const connect = vi.fn();
 const disconnect = vi.fn();
 const sendMessage = vi.fn();
 let createdRoomIdStore: string | null = null;
+let sessionState = {
+  roomId: null as string | null,
+  role: null as "owner" | "participant" | null,
+  messages: [] as Array<{ id: number; text: string; type: "self" | "peer" | "info" }>,
+  status: "idle" as "idle" | "connecting" | "connected" | "error" | "disconnected",
+  peers: 1,
+  capacity: 8,
+};
 
 vi.mock("../src/hooks/useWebSocket", () => ({
   useWebSocket: () => ({
     connect,
     disconnect,
     sendMessage,
-    messages: [],
-    status: "idle",
-    peers: 1,
-    capacity: 8,
+    ...sessionState,
   }),
 }));
 
@@ -26,11 +31,11 @@ vi.mock("../src/utils/uuid", () => ({
 }));
 
 vi.mock("../src/utils/storage", () => ({
-  getCreatedRoomId: vi.fn(() => createdRoomIdStore),
-  setCreatedRoomId: vi.fn((roomId) => {
+  getCreatedRoomId: vi.fn(async () => createdRoomIdStore),
+  setCreatedRoomId: vi.fn(async (roomId) => {
     createdRoomIdStore = roomId;
   }),
-  clearCreatedRoomId: vi.fn(() => {
+  clearCreatedRoomId: vi.fn(async () => {
     createdRoomIdStore = null;
   }),
 }));
@@ -44,6 +49,14 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   createdRoomIdStore = null;
+  sessionState = {
+    roomId: null,
+    role: null,
+    messages: [],
+    status: "idle",
+    peers: 1,
+    capacity: 8,
+  };
   connect.mockResolvedValue({ ok: true });
 });
 
@@ -61,6 +74,15 @@ describe("App phase-3 flow", () => {
 
   it("handles Create flow and enters chat as owner", async () => {
     const user = userEvent.setup();
+    connect.mockImplementation(async ({ roomId }) => {
+      sessionState = {
+        ...sessionState,
+        roomId,
+        role: "owner",
+        status: "connected",
+      };
+      return { ok: true };
+    });
     render(<App />);
 
     await user.click(screen.getByText("Create Room"));
@@ -104,14 +126,24 @@ describe("App phase-3 flow", () => {
     createdRoomIdStore = "99999999-9999-4999-8999-999999999999";
     render(<App />);
 
-    expect(screen.getByText("Regenerate")).toBeDefined();
-    expect((screen.getByLabelText("Room ID") as HTMLInputElement).value).toBe(
+    return screen.findByText("Regenerate").then(() => {
+      expect((screen.getByLabelText("Room ID") as HTMLInputElement).value).toBe(
       "99999999-9999-4999-8999-999999999999",
-    );
+      );
+    });
   });
 
   it("auto leaves room when popup unmounts", async () => {
     const user = userEvent.setup();
+    connect.mockImplementation(async ({ roomId }) => {
+      sessionState = {
+        ...sessionState,
+        roomId,
+        role: "owner",
+        status: "connected",
+      };
+      return { ok: true };
+    });
     const view = render(<App />);
 
     await user.click(screen.getByText("Create Room"));
@@ -123,22 +155,22 @@ describe("App phase-3 flow", () => {
 
     view.unmount();
 
-    expect(disconnect).toHaveBeenCalledTimes(1);
-    expect(createdRoomIdStore).toBeNull();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(createdRoomIdStore).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   });
 
-  it("auto leaves room when side panel pagehide fires", async () => {
-    const user = userEvent.setup();
+  it("restores active chat session after side panel remount", () => {
+    sessionState = {
+      ...sessionState,
+      roomId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      role: "owner",
+      status: "connected",
+      messages: [{ id: 1, text: '✓ Created room "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as owner-a.', type: "info" }],
+    };
+
     render(<App />);
 
-    await user.click(screen.getByText("Create Room"));
-    await user.type(screen.getByLabelText("Username"), "owner-a");
-    await user.type(screen.getByLabelText("Passcode"), "secret123");
-    await user.click(screen.getByText("Create Room"));
-
-    window.dispatchEvent(new Event("pagehide"));
-
-    expect(disconnect).toHaveBeenCalledTimes(1);
-    expect(createdRoomIdStore).toBeNull();
+    expect(screen.getByText("owner")).toBeDefined();
+    expect(screen.getByText("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toBeDefined();
   });
 });

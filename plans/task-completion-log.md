@@ -10,6 +10,38 @@ Add one entry per completed task.
 - Verification Result:
 - Follow-up Notes:
 
+## 2026-02-28 - task-12-background-session-orchestration.md
+- Summary: Moved extension session ownership into a background-managed controller with a runtime message contract, and changed the sidepanel hook/App to subscribe to background session state so active chats survive sidepanel close/reopen.
+- Tests Added/Updated: Added `extension/test/background-session-runtime.test.ts` for background message routing and deterministic unknown-action/connect-failure handling; updated `extension/test/app-flow.test.tsx` to assert no disconnect on unmount and active-session restoration on remount.
+- Error Handling Added: Added structured `UNKNOWN_ACTION` runtime failures, sidepanel fallback errors when the background runtime is unavailable, and deterministic background status snapshots after connection/runtime failures.
+- Changed Files: `extension/entrypoints/background.ts`, `extension/src/App.tsx`, `extension/src/hooks/useWebSocket.ts`, `extension/src/session/sessionManager.ts`, `extension/src/session/runtime.ts`, `extension/src/types.ts`, `extension/test/background-session-runtime.test.ts`, `extension/test/app-flow.test.tsx`, `plans/task-completion-log.md`.
+- Verification Result: `npm test` passed in `extension` (`8` files, `27` tests) and `npm run typecheck` passed in `extension`.
+- Follow-up Notes: Task 13 can replace the hardcoded signaling URL in the background session manager; Task 14 can move created-room persistence out of sidepanel local storage without changing the new runtime contract.
+
+## 2026-02-28 - task-13-configure-signaling-endpoint-by-env.md
+- Summary: Replaced the hardcoded signaling URL with a runtime resolver that defaults to localhost in development, requires `PEER_BRIDGE_SIGNALING_URL` for non-dev builds, and injects the resolved endpoint into the background session manager.
+- Tests Added/Updated: Added `extension/test/runtime-config.test.ts` for dev default, explicit override, and invalid/missing production config; added `extension/test/session-manager-config.test.ts` to verify the manager uses the resolved endpoint and fails safely without opening a socket on invalid config.
+- Error Handling Added: Invalid or missing signaling endpoint config now returns deterministic user-safe connection failures instead of attempting undefined WebSocket behavior.
+- Changed Files: `extension/src/config/runtime.ts`, `extension/src/session/sessionManager.ts`, `extension/src/vite-env.d.ts`, `extension/test/runtime-config.test.ts`, `extension/test/session-manager-config.test.ts`, `extension/wxt.config.ts`, `README.md`, `plans/task-completion-log.md`.
+- Verification Result: `npm test` passed in `extension` and `npm run typecheck` passed in `extension`.
+- Follow-up Notes: Production build/deploy steps now need `PEER_BRIDGE_SIGNALING_URL` set explicitly.
+
+## 2026-02-28 - task-14-migrate-created-room-state-to-chrome-storage.md
+- Summary: Migrated created-room persistence to async `chrome.storage.local` with safe `localStorage` fallback and updated the App to hydrate created-room state asynchronously without regressing active-session restoration.
+- Tests Added/Updated: Added `extension/test/storage.test.ts` covering chrome-storage read/write/clear, rejected storage fallback, and blank input ignore behavior; updated `extension/test/app-flow.test.tsx` to wait for async room-id hydration.
+- Error Handling Added: Storage read/write/remove failures are contained to warning-level logging with null/no-op fallback behavior, never thrown into UI render flow.
+- Changed Files: `extension/src/utils/storage.ts`, `extension/src/App.tsx`, `extension/test/storage.test.ts`, `extension/test/app-flow.test.tsx`, `extension/wxt.config.ts`, `plans/task-completion-log.md`.
+- Verification Result: `npm test` passed in `extension` (`11` files, `35` tests) and `npm run typecheck` passed in `extension`.
+- Follow-up Notes: The new async storage contract is ready for any future background-side reads without depending on sidepanel-only APIs.
+
+## 2026-02-28 - task-15-extension-lifecycle-integration-smoke.md
+- Summary: Replaced the placeholder smoke test with lifecycle-oriented coverage for sidepanel/background state hydration and listener cleanup, and extracted the background bootstrap into a testable runtime module.
+- Tests Added/Updated: Replaced `extension/test/smoke.test.ts` with `extension/test/smoke.test.tsx` covering status hydration, controlled runtime interruption, and repeated mount/unmount listener cleanup; added `extension/test/background-lifecycle.test.ts` for background bootstrap, request routing, state broadcast, and interruption behavior.
+- Error Handling Added: Smoke coverage now asserts controlled disconnected/failure responses for runtime-port interruption instead of silent listener drops or uncaught exceptions.
+- Changed Files: `extension/src/session/backgroundRuntime.ts`, `extension/entrypoints/background.ts`, `extension/test/smoke.test.tsx`, `extension/test/background-lifecycle.test.ts`, `extension/test/test-utils/chromeRuntime.ts`, `extension/test/background-session-runtime.test.ts`, `docs/extension-lifecycle-smoke.md`, `README.md`, `plans/task-completion-log.md`.
+- Verification Result: `npm test` passed in `extension` (`12` files, `40` tests) and `npm run typecheck` passed in `extension`.
+- Follow-up Notes: This is still integration-style unit coverage; full browser automation is still out of scope and can be added later if needed.
+
 ## 2026-02-25 - task-01-server-dispatcher-and-peer-id.md
 - Summary: Added server action dispatcher (`action`/`type`), assigned room-scoped `peerId` on join, and included initial peer list in `joined` payload.
 - Tests Added/Updated: Added `server/test/dispatcher-peer-id.test.js` covering join `peerId` payload, unsupported action error, and malformed JSON safety.

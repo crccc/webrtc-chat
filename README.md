@@ -3,6 +3,8 @@
 **Peer Bridge** is a minimal, room-based realtime messaging system for Chrome extensions.
 Two (or more) instances of the extension join the same room, negotiate peer links
 over a lightweight WebSocket signaling server, and exchange chat messages over WebRTC DataChannels.
+The extension keeps room/session ownership in the Manifest V3 background service worker,
+so sidepanel close/reopen does not drop an active session by itself.
 
 ---
 
@@ -42,6 +44,16 @@ npm install
 npm run build
 ```
 
+Set `PEER_BRIDGE_SIGNALING_URL` for non-development builds. In development, the extension defaults to `ws://localhost:8888`.
+
+```bash
+cd extension
+PEER_BRIDGE_SIGNALING_URL=wss://signal.example.com npm run build
+```
+
+The extension also uses the `storage` permission and persists the created room id in
+`chrome.storage.local`, with a safe `localStorage` fallback for unsupported contexts.
+
 ### 3. Load the extension
 
 1. Open `chrome://extensions` in Chrome.
@@ -76,4 +88,17 @@ See [docs/protocol.md](docs/protocol.md) for the full message specification.
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for architecture diagrams and
-behavior flow walkthroughs.
+behavior flow walkthroughs, including the extracted background bootstrap layer in
+`src/session/backgroundRuntime.ts`.
+
+## Manual Smoke
+
+See [docs/extension-lifecycle-smoke.md](docs/extension-lifecycle-smoke.md) for the
+extension lifecycle smoke checklist covering reload, reopen, disable-enable, and tab refresh scenarios.
+
+## Automated Smoke
+
+Lifecycle-oriented extension smoke coverage now lives in:
+
+- `extension/test/smoke.test.tsx`
+- `extension/test/background-lifecycle.test.ts`

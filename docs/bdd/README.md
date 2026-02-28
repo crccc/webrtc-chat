@@ -9,6 +9,6 @@
 | `room-capacity.feature` | 8/8 capacity boundary | `server/test/capacity-limit.test.js` |
 
 ## Current Test Baseline
-- Extension smoke test: `extension/test/smoke.test.js`
+- Extension smoke tests: `extension/test/smoke.test.tsx`, `extension/test/background-lifecycle.test.ts`
 - Server smoke test: `server/test/smoke.test.js`
 - Test runner: `vitest` (configured per package)

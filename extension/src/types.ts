@@ -16,6 +16,16 @@ export interface ChatMessage {
   type: MessageType
 }
 
+export interface BackgroundSessionSnapshot {
+  roomId: string | null
+  role: Role | null
+  messages: ChatMessage[]
+  status: ConnectionStatus
+  peers: number
+  capacity: number
+  error: ConnectFailureResult | null
+}
+
 export interface ConnectArgs extends RoomFormPayload {
   flow?: ConnectFlow
 }
@@ -36,8 +46,22 @@ export interface RealtimeHookResult {
   connect: (args: ConnectArgs) => Promise<ConnectResult>
   disconnect: () => void
   sendMessage: (text: string) => void
+  roomId: string | null
+  role: Role | null
   messages: ChatMessage[]
   status: ConnectionStatus
   peers: number
   capacity: number
 }
+
+export interface RuntimeSessionMessage {
+  namespace: 'session'
+  action: 'connect' | 'disconnect' | 'send' | 'status' | 'state'
+  payload?: ConnectArgs | { text: string } | { snapshot: BackgroundSessionSnapshot }
+}
+
+export type RuntimeSessionResponse =
+  | ConnectResult
+  | { ok: true }
+  | { ok: true; snapshot: BackgroundSessionSnapshot }
+  | ConnectFailureResult

@@ -50,6 +50,6 @@
 - Completion log entry appended.
 
 ## Dependencies / Notes
-- Touchpoints include `extension/wxt.config.ts`, `extension/src/hooks/useWebSocket.js`, and related tests/docs.
+- Touchpoints include `extension/wxt.config.ts`, `extension/src/hooks/useWebSocket.ts`, a new runtime config resolver if needed, and related tests/docs.
+- Environment handling should follow current WXT build/runtime conventions instead of ad hoc global constants.
 - Independent of background orchestration, but both tasks should align on single config source.
-
