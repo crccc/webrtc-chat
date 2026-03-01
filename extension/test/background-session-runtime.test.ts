@@ -3,8 +3,8 @@ import {
   createSessionMessageHandler,
   handleSessionMessageSafely,
   type BackgroundSessionController,
-} from "../src/session/runtime";
-import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../src/types";
+} from "../src/background/messageRouter";
+import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../src/shared/sessionTypes";
 
 function createSnapshot(
   overrides: Partial<BackgroundSessionSnapshot> = {},

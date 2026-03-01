@@ -1,324 +1,188 @@
 # Peer Bridge Architecture
 
-This document explains how the extension, signaling server, and WebRTC layer fit
-together, and what objects/components are involved in each major behavior.
+This document describes the current runtime-based structure of the extension and
+how messages move between the sidepanel, background service worker, offscreen
+document, and signaling server.
 
-## High-Level Architecture
+## Runtime Layout
+
+```text
+extension/src/
+  background/
+    messageRouter.ts
+    offscreenBridge.ts
+    runtime.ts
+    sessionManager.ts
+  offscreen/
+    iceConfig.ts
+    main.ts
+    rtcPeerManager.ts
+  shared/
+    rtcProtocol.ts
+    runtimeConfig.ts
+    session.ts
+    sessionTypes.ts
+    storage.ts
+    uuid.ts
+  sidepanel/
+    App.tsx
+    App.css
+    components/
+    hooks/
+```
+
+## Responsibilities
+
+### `background/`
+
+- Owns the WebSocket connection to the signaling server
+- Owns the background session snapshot
+- Opens the sidepanel from the toolbar action
+- Routes runtime messages from the sidepanel
+- Ensures an offscreen document exists before RTC activity starts
+
+Key files:
+
+- [`extension/src/background/runtime.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/background/runtime.ts)
+- [`extension/src/background/messageRouter.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/background/messageRouter.ts)
+- [`extension/src/background/sessionManager.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/background/sessionManager.ts)
+- [`extension/src/background/offscreenBridge.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/background/offscreenBridge.ts)
+
+### `offscreen/`
+
+- Owns `RTCPeerConnection`
+- Owns `RTCDataChannel`
+- Applies ICE config
+- Sends RTC events back to the background runtime
+
+Key files:
+
+- [`extension/src/offscreen/main.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/offscreen/main.ts)
+- [`extension/src/offscreen/rtcPeerManager.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/offscreen/rtcPeerManager.ts)
+- [`extension/src/offscreen/iceConfig.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/offscreen/iceConfig.ts)
+
+### `sidepanel/`
+
+- Renders the user-facing UI
+- Sends connect, disconnect, send, and status requests to the background runtime
+- Mirrors the background snapshot into React state
+
+Key files:
+
+- [`extension/src/sidepanel/App.tsx`](/Users/crccc/side-projects/webrtc-chat/extension/src/sidepanel/App.tsx)
+- [`extension/src/sidepanel/hooks/useWebSocket.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/sidepanel/hooks/useWebSocket.ts)
+- [`extension/src/sidepanel/components/CreateRoomSection.tsx`](/Users/crccc/side-projects/webrtc-chat/extension/src/sidepanel/components/CreateRoomSection.tsx)
+- [`extension/src/sidepanel/components/JoinSection.tsx`](/Users/crccc/side-projects/webrtc-chat/extension/src/sidepanel/components/JoinSection.tsx)
+- [`extension/src/sidepanel/components/ChatSection.tsx`](/Users/crccc/side-projects/webrtc-chat/extension/src/sidepanel/components/ChatSection.tsx)
+
+### `shared/`
+
+- Holds cross-runtime message contracts
+- Holds common session helpers and shared type definitions
+- Holds runtime config resolution and storage helpers
+
+Key files:
+
+- [`extension/src/shared/rtcProtocol.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/shared/rtcProtocol.ts)
+- [`extension/src/shared/session.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/shared/session.ts)
+- [`extension/src/shared/sessionTypes.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/shared/sessionTypes.ts)
+- [`extension/src/shared/runtimeConfig.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/shared/runtimeConfig.ts)
+- [`extension/src/shared/storage.ts`](/Users/crccc/side-projects/webrtc-chat/extension/src/shared/storage.ts)
+
+## High-Level Flow
 
 ```mermaid
 flowchart LR
   User[User]
-  BG[WXT Background<br/>entrypoints/background.ts]
-  SP[Sidepanel Entry<br/>entrypoints/sidepanel/main.tsx]
-  App[React App<br/>src/App.tsx]
-  Hook[Runtime Client Hook<br/>src/hooks/useWebSocket.ts]
-  Store[Chrome Storage<br/>src/utils/storage.ts]
-  Runtime[Runtime Config<br/>src/config/runtime.ts]
-  Bootstrap[Background Bootstrap<br/>src/session/backgroundRuntime.ts]
-  Session[Background Session Manager<br/>src/session/sessionManager.ts]
-  Bridge[Offscreen RTC Bridge<br/>src/session/offscreenBridge.ts]
-  Offscreen[Offscreen RTC Runtime<br/>src/offscreen/main.ts]
-  PeerMgr[RTC Peer Manager<br/>src/session/rtcPeerManager.ts]
-  UUID[UUID Helper<br/>src/utils/uuid.ts]
-  WS[WebSocket Signaling<br/>resolved ws/wss endpoint]
-  Server[Node Signaling Server<br/>server/index.js]
-  OffscreenDoc[chrome.offscreen document]
-  RTC[RTCPeerConnection Map<br/>offscreen-owned]
-  DC[RTCDataChannel chat]
-  Peer[Other Extension Instance]
+  Sidepanel[Sidepanel UI]
+  Background[Background Service Worker]
+  Offscreen[Offscreen Document]
+  Server[Signaling Server]
+  Peer[Remote Peer]
 
-  User --> BG
-  BG --> SP
-  SP --> App
-  App --> Store
-  App --> UUID
-  App --> Hook
-  Hook --> BG
-  BG --> Bootstrap
-  Bootstrap --> Runtime
-  Bootstrap --> Session
-  Session --> Bridge
-  Session --> WS
-  Bridge --> OffscreenDoc
-  OffscreenDoc --> Offscreen
-  Offscreen --> PeerMgr
-  WS --> Server
-  PeerMgr --> RTC
-  RTC --> DC
-  DC --> Peer
+  User --> Sidepanel
+  Sidepanel --> Background
+  Background --> Server
+  Background --> Offscreen
+  Offscreen --> Background
+  Offscreen --> Peer
+  Server --> Background
 ```
 
-## Extension Runtime Structure
-
-In this document, `bootstrap` means the background runtime setup layer: the code
-that wires Chrome extension events and messaging to the session controller during startup.
-
-```mermaid
-flowchart TD
-  Background[background.ts<br/>Opens sidepanel + owns session lifecycle]
-  Sidepanel[sidepanel/main.tsx<br/>Mounts React root]
-  App[App.tsx<br/>View + async storage hydration]
-  Create[CreateRoomSection.tsx]
-  Join[JoinSection.tsx]
-  Home[HomeSection.tsx]
-  Chat[ChatSection.tsx]
-  Hook[useWebSocket.ts<br/>Runtime messaging client]
-  Bootstrap[backgroundRuntime.ts<br/>Registers runtime listeners]
-  Session[sessionManager.ts<br/>Signaling + snapshot orchestration]
-  Bridge[offscreenBridge.ts<br/>Ensures offscreen document + runtime bridge]
-  Offscreen[offscreen/main.ts<br/>Receives RTC commands]
-  PeerMgr[rtcPeerManager.ts<br/>Owns RTCPeerConnection + RTCDataChannel]
-
-  Background --> Sidepanel
-  Sidepanel --> App
-  App --> Home
-  App --> Create
-  App --> Join
-  App --> Chat
-  App --> Hook
-  Background --> Bootstrap
-  Bootstrap --> Session
-  Session --> Bridge
-  Bridge --> Offscreen
-  Offscreen --> PeerMgr
-  Hook --> Bootstrap
-```
-
-## Core Objects
-
-| Object / State | Location | Responsibility |
-| --- | --- | --- |
-| `view` | `src/App.tsx` | Chooses `home/create/join/chat` screen |
-| `createdRoomId` | `src/App.tsx` | Async persisted owner room id used to restore create flow |
-| `sessionRef` | `src/App.tsx` | Tracks latest UI-visible room state for disconnect cleanup |
-| `snapshot` | `src/hooks/useWebSocket.ts` | Sidepanel copy of background session state |
-| `setupBackgroundRuntime` | `src/session/backgroundRuntime.ts` | Wires Chrome runtime events and messaging to the background session controller |
-| `socket` | `src/session/sessionManager.ts` | Active signaling WebSocket owned by background |
-| `peerId` | `src/session/sessionManager.ts` | Local peer id assigned by server |
-| `messages` | `src/session/sessionManager.ts` | Chat timeline broadcast back to the sidepanel |
-| `createChromeOffscreenRtcBridge` | `src/session/offscreenBridge.ts` | Creates/targets the offscreen document and relays RTC commands/events |
-| `rtcManager` | `src/offscreen/main.ts` | Offscreen-owned WebRTC runtime instance |
-| `peers` | `src/session/rtcPeerManager.ts` | `Map<peerId, { pc, dc }>` for all remote peers |
-| `resolveSignalingEndpoint` | `src/config/runtime.ts` | Resolves env-backed websocket endpoint |
-| `rooms` | `server/index.js` | Server-side room registry |
-| `peersById` | `server/index.js` | Server-side lookup from `peerId` to socket |
-
-## Control Plane vs Data Plane
-
-Peer Bridge intentionally splits responsibilities into two layers:
-
-### Control Plane: signaling server
-
-The signaling server remains responsible for session coordination:
-
-- Room create/join validation
-- Passcode enforcement
-- Username uniqueness
-- Capacity limits
-- `peerId` assignment
-- Presence updates
-- `offer` / `answer` / `ice` relay
-- Peer join/leave notifications
-
-This is the part that answers:
-
-- Who is in the room?
-- Is this join allowed?
-- Which peer should I negotiate with?
-- How do I reach the remote peer's signaling endpoint?
-
-### Data Plane: peer-to-peer WebRTC in offscreen document
-
-Once negotiation succeeds, the peers talk directly over WebRTC:
-
-- Chat text over `RTCDataChannel`
-- Future audio/video media tracks
-- Future peer-to-peer collaborative events
-
-In Manifest V3, Peer Bridge does not run this layer inside the background service
-worker. The background owns signaling and session state, while the offscreen
-document owns `RTCPeerConnection` and `RTCDataChannel`.
-
-This is the part that answers:
-
-- What message did the user send?
-- What media/data should the other peer receive?
-
-### Why not move room management to peers too?
-
-That is possible only in a very constrained model. In practice, it breaks down
-once any of these happen:
-
-- A new peer joins after the first connection is established
-- A peer refreshes or reconnects
-- Network conditions change and renegotiation is needed
-- Permissions, room access, or capacity must be enforced consistently
-
-Because of that, Peer Bridge keeps **room/session orchestration on the server**
-while moving **chat/media payloads off the server**.
-
-### Design Summary
-
-- Signaling server manages the **control plane**
-- WebRTC peers manage the **data plane**
-- Chat should be peer-to-peer
-- Session coordination should remain centralized
-
-## Flow: Open Extension To Sidepanel UI
+## Create or Join Flow
 
 ```mermaid
 sequenceDiagram
-  participant U as User
-  participant BG as background.ts
-  participant SP as sidepanel/main.tsx
-  participant App as App.tsx
-  participant Store as storage.ts
+  participant UI as Sidepanel
+  participant BG as Background
+  participant OD as Offscreen
+  participant WS as Signaling Server
 
-  U->>BG: Click extension icon
-  BG->>BG: chrome.sidePanel.open(tabId)
-  BG->>SP: Open sidepanel page
-  SP->>App: Mount React app
-  App->>Store: getCreatedRoomId()
-  Store-->>App: Promise<roomId | null>
-  App-->>U: Render home or create screen
+  UI->>BG: runtime message: connect
+  BG->>OD: ensureReady + resetSession
+  BG->>WS: join room
+  WS-->>BG: joined(peerId, peerList, peers, capacity)
+  BG->>OD: peer-joined for existing peers
+  BG-->>UI: state snapshot + connect response
 ```
 
-## Flow: Create Or Join A Room
+## Signaling and RTC Flow
 
 ```mermaid
 sequenceDiagram
-  participant U as User
-  participant UI as App + Form Section
-  participant Hook as useWebSocket.ts
-  participant BG as background.ts
-  participant Session as sessionManager.ts
-  participant Bridge as offscreenBridge.ts
-  participant Offscreen as offscreen/main.ts
-  participant WS as WebSocket
-  participant S as server/index.js
+  participant BGA as Background A
+  participant ODA as Offscreen A
+  participant WS as Signaling Server
+  participant BGB as Background B
+  participant ODB as Offscreen B
 
-  U->>UI: Submit create/join form
-  UI->>Hook: connect({ roomId, username, passcode, flow })
-  Hook->>BG: chrome.runtime.sendMessage(connect)
-  BG->>Session: connect(...)
-  Session->>Bridge: ensureReady()
-  Bridge->>Offscreen: create/target offscreen doc
-  Session->>WS: open resolved ws/wss endpoint
-  WS->>S: { action:"join", ... }
-  S->>S: Validate room/passcode/capacity
-  S-->>WS: { type:"joined", peerId, peerList, peers, capacity }
-  WS-->>Session: joined payload
-  Session->>Bridge: resetSession(peerId, username)
-  Session->>BG: publish snapshot update
-  BG-->>Hook: runtime state message
-  BG-->>Hook: connect response
-  Hook-->>UI: resolve { ok:true } + refresh snapshot
-  UI-->>U: Enter chat screen
+  WS-->>BGA: signal.joined(peerId=B)
+  BGA->>ODA: peer-joined(B)
+  ODA->>BGA: rtc signal event
+  BGA->>WS: offer/answer/ice
+  WS->>BGB: offer/answer/ice
+  BGB->>ODB: signal
+  ODB->>BGB: rtc signal event
+  BGB->>WS: answer/ice
 ```
 
-## Flow: Peer Discovery And WebRTC Negotiation
+## Chat Send Flow
 
 ```mermaid
 sequenceDiagram
-  participant A as Extension A Background Session
-  participant OA as Extension A Offscreen RTC
-  participant S as Signaling Server
-  participant B as Extension B Background Session
-  participant OB as Extension B Offscreen RTC
+  participant UI as Sidepanel
+  participant BG as Background
+  participant OD as Offscreen
+  participant Peer as Remote Peer
 
-  B->>S: join room
-  S-->>B: joined(peerId, peerList=[A])
-  S-->>A: signal.joined(peerId=B)
-
-  Note over OA,OB: Deterministic offerer rule: smaller peerId initiates
-
-  A->>OA: peerJoined(B)
-  OA->>S: signal request via background bridge
-  S-->>B: offer(from=A, payload)
-  B->>OB: forward offer from background
-  OB->>OB: setRemoteDescription(offer)
-  OB->>OB: createAnswer()
-  OB->>S: signal request via background bridge
-  S-->>A: answer(from=B, payload)
-  A->>OA: forward answer from background
-  OA->>S: ice(...)
-  OB->>S: ice(...)
+  UI->>BG: runtime message: send
+  BG->>OD: send(text)
+  OD->>Peer: RTCDataChannel.send(...)
+  Peer-->>OD: incoming channel message
+  OD->>BG: received(from, text)
+  BG-->>UI: updated snapshot
 ```
 
-## Flow: Send Chat Message
+## Why Offscreen Exists
 
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant Chat as ChatSection.tsx
-  participant Hook as useWebSocket.ts
-  participant BG as background.ts
-  participant Session as sessionManager.ts
-  participant Bridge as offscreenBridge.ts
-  participant Offscreen as offscreen/main.ts
-  participant DC as RTCDataChannel
-  participant Peer as Remote Extension
+Manifest V3 background logic runs in a service worker. Peer Bridge does not keep
+`RTCPeerConnection` in that worker. Instead:
 
-  U->>Chat: Type message + click Send
-  Chat->>Hook: onSend(trimmedText)
-  Hook->>BG: chrome.runtime.sendMessage(send)
-  BG->>Session: sendMessage(trimmedText)
-  Session->>Bridge: sendMessage(trimmedText)
-  Bridge->>Offscreen: send command
-  Offscreen->>DC: dc.send({ type:"chat", from, text })
-  DC-->>Peer: DataChannel payload
-  Peer->>Peer: decodeChannelMessage()
-  Peer->>Peer: append incoming chat to messages
-```
+- background owns signaling and session orchestration
+- offscreen owns the actual RTC session
 
-## Flow: Sidepanel Close/Reopen
+That split avoids depending on service-worker availability for page-like RTC
+behavior and allows the sidepanel UI to close without immediately tearing down
+the visible interface.
 
-```mermaid
-sequenceDiagram
-  participant SP as Sidepanel
-  participant BG as background.ts
-  participant Session as sessionManager.ts
-  participant Offscreen as offscreen/main.ts
+## Key Entrypoints
 
-  SP-xBG: Sidepanel closes
-  Note over BG,Offscreen: Background + offscreen session remain active
-  SP->>BG: Sidepanel reopens and requests status
-  BG->>Session: getSnapshot()
-  BG-->>SP: current session snapshot
-```
-
-## Flow: Disconnect / Peer Leave
-
-```mermaid
-sequenceDiagram
-  participant Leaving as Leaving Peer
-  participant S as Signaling Server
-  participant Remaining as Remaining Peer Background Session
-
-  Leaving-xS: socket close
-  S->>S: Remove socket from room + peersById
-  S-->>Remaining: signal.left(peerId)
-  S-->>Remaining: presence(peers, capacity)
-  Remaining->>Remaining: closePeer(peerId)
-  Remaining->>Remaining: Update peer count + broadcast snapshot
-```
-
-## Behavior Mapping
-
-| Behavior | Main Files Visited |
-| --- | --- |
-| Open sidepanel | `entrypoints/background.ts` -> `entrypoints/sidepanel/main.tsx` -> `src/App.tsx` |
-| Create room | `CreateRoomSection.tsx` -> `App.tsx` -> `useWebSocket.ts` -> `background.ts` -> `backgroundRuntime.ts` -> `sessionManager.ts` -> `server/index.js` |
-| Join room | `JoinSection.tsx` -> `App.tsx` -> `useWebSocket.ts` -> `background.ts` -> `backgroundRuntime.ts` -> `sessionManager.ts` -> `server/index.js` |
-| Background bootstrap | `entrypoints/background.ts` -> `session/backgroundRuntime.ts` |
-| Signaling relay | `sessionManager.ts` -> `server/index.js` -> remote `sessionManager.ts` |
-| WebRTC setup | `sessionManager.ts` -> `iceConfig.ts` -> browser `RTCPeerConnection` |
-| Chat send | `ChatSection.tsx` -> `useWebSocket.ts` -> `background.ts` -> `backgroundRuntime.ts` -> `sessionManager.ts` -> `RTCDataChannel` |
-| Created-room persistence | `App.tsx` -> `utils/storage.ts` -> `chrome.storage.local` |
-| Sidepanel reopen restore | `App.tsx` -> `useWebSocket.ts` -> `background.ts` -> `backgroundRuntime.ts` -> `sessionManager.ts` |
+- [`extension/entrypoints/background.ts`](/Users/crccc/side-projects/webrtc-chat/extension/entrypoints/background.ts)
+- [`extension/entrypoints/sidepanel/main.tsx`](/Users/crccc/side-projects/webrtc-chat/extension/entrypoints/sidepanel/main.tsx)
+- [`extension/entrypoints/offscreen.html`](/Users/crccc/side-projects/webrtc-chat/extension/entrypoints/offscreen.html)
 
 ## Related Docs
 
+- [README](../README.md)
 - [Protocol](./protocol.md)
 - [Extension Lifecycle Smoke](./extension-lifecycle-smoke.md)
-- [README](../README.md)

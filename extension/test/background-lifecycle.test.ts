@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { setupBackgroundRuntime } from "../src/session/backgroundRuntime";
-import type { BackgroundSessionSnapshot } from "../src/types";
+import { setupBackgroundRuntime } from "../src/background/runtime";
+import type { BackgroundSessionSnapshot } from "../src/shared/sessionTypes";
 import { createBackgroundRuntimeTestHarness } from "./test-utils/chromeRuntime";
 
 function createSnapshot(

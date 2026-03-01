@@ -1,5 +1,5 @@
 import { useState, useRef, type KeyboardEvent } from 'react'
-import type { RoomFormPayload } from '../types'
+import type { RoomFormPayload } from '../../shared/sessionTypes'
 
 interface JoinSectionProps {
   onJoin: (payload: RoomFormPayload) => void

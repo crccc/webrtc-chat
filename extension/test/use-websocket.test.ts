@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { decodeChannelMessage, getServerErrorMessage, shouldInitiateOffer } from "../src/hooks/useWebSocket";
+import {
+  decodeChannelMessage,
+  getServerErrorMessage,
+  shouldInitiateOffer,
+} from "../src/sidepanel/hooks/useWebSocket";
 
 describe("useWebSocket error code mapping", () => {
   it("maps ROOM_FULL and passcode-related errors", () => {

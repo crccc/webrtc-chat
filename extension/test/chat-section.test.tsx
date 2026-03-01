@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ChatSection from "../src/components/ChatSection";
+import ChatSection from "../src/sidepanel/components/ChatSection";
 
 beforeAll(() => {
   if (!Element.prototype.scrollIntoView) {

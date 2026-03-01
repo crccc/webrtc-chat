@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import CreateRoomSection from "../src/components/CreateRoomSection";
+import CreateRoomSection from "../src/sidepanel/components/CreateRoomSection";
 
 const uuidQueue = [
   "11111111-1111-4111-8111-111111111111",
@@ -12,7 +12,7 @@ const uuidQueue = [
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-vi.mock("../src/utils/uuid", () => ({
+vi.mock("../src/shared/uuid", () => ({
   generateUuidV4: vi.fn(() => uuidQueue.shift() || "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
 }));
 

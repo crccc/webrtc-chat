@@ -1,8 +1,8 @@
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { useWebSocket } from "../src/hooks/useWebSocket";
-import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../src/types";
+import { useWebSocket } from "../src/sidepanel/hooks/useWebSocket";
+import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../src/shared/sessionTypes";
 import { createSidepanelChromeRuntimeTestHarness } from "./test-utils/chromeRuntime";
 
 function createSnapshot(

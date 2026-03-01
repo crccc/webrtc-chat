@@ -5,7 +5,7 @@ import type {
   ConnectResult,
   RuntimeSessionMessage,
   RuntimeSessionResponse,
-} from "../types";
+} from "../shared/sessionTypes";
 
 export interface BackgroundSessionController {
   connect: (args: ConnectArgs) => Promise<ConnectResult>;

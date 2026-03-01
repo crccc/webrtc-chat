@@ -1,4 +1,8 @@
-import type { OffscreenCommandMessage, OffscreenCommandResponse, OffscreenEventMessage } from "./offscreenProtocol";
+import type {
+  OffscreenCommandMessage,
+  OffscreenCommandResponse,
+  OffscreenEventMessage,
+} from "../shared/rtcProtocol";
 
 export interface BackgroundRtcBridgeEventHandler {
   (event: OffscreenEventMessage): void;

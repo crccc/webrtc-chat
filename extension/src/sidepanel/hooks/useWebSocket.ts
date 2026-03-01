@@ -4,7 +4,7 @@ import {
   getDefaultSessionSnapshot,
   getServerErrorMessage,
   shouldInitiateOffer,
-} from "../session/sessionManager";
+} from "../../shared/session";
 import type {
   BackgroundSessionSnapshot,
   ConnectArgs,
@@ -12,7 +12,7 @@ import type {
   RealtimeHookResult,
   RuntimeSessionMessage,
   RuntimeSessionResponse,
-} from "../types";
+} from "../../shared/sessionTypes";
 
 function canUseRuntimeApi(): boolean {
   return (

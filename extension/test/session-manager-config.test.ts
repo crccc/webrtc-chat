@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBackgroundSessionManager } from "../src/session/sessionManager";
-import type { BackgroundRtcBridge } from "../src/session/offscreenBridge";
+import { createBackgroundSessionManager } from "../src/background/sessionManager";
+import type { BackgroundRtcBridge } from "../src/background/offscreenBridge";
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];

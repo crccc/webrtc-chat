@@ -6,7 +6,7 @@ import {
   getSignalingServerUrl,
   setCreatedRoomId,
   setSignalingServerUrl,
-} from "../src/utils/storage";
+} from "../src/shared/storage";
 
 type ChromeGlobal = { chrome?: typeof chrome };
 

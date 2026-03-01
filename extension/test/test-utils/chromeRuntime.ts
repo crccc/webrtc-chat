@@ -1,5 +1,8 @@
 import { vi } from "vitest";
-import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../../src/types";
+import type {
+  BackgroundSessionSnapshot,
+  RuntimeSessionMessage,
+} from "../../src/shared/sessionTypes";
 
 type RuntimeMessageListener = (
   message: RuntimeSessionMessage,

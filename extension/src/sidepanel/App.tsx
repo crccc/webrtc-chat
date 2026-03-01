@@ -5,15 +5,15 @@ import CreateRoomSection from './components/CreateRoomSection'
 import JoinSection from './components/JoinSection'
 import ChatSection from './components/ChatSection'
 import { useWebSocket } from './hooks/useWebSocket'
-import type { AppView, Role, RoomFormPayload } from './types'
+import type { AppView, Role, RoomFormPayload } from '../shared/sessionTypes'
 import {
   clearCreatedRoomId,
   getCreatedRoomId,
   getSignalingServerUrl,
   setCreatedRoomId,
   setSignalingServerUrl,
-} from './utils/storage'
-import { getDefaultDevSignalingUrl } from './config/runtime'
+} from '../shared/storage'
+import { getDefaultDevSignalingUrl } from '../shared/runtimeConfig'
 
 interface SessionState {
   roomId: string

@@ -3,7 +3,7 @@ import {
   getDefaultDevSignalingUrl,
   getSignalingEndpointErrorMessage,
   resolveSignalingEndpoint,
-} from "../src/config/runtime";
+} from "../src/shared/runtimeConfig";
 
 describe("runtime signaling config", () => {
   it("uses explicit env override when valid", () => {

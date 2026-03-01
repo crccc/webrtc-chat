@@ -87,19 +87,6 @@ export interface OffscreenAckResponse {
 
 export type OffscreenCommandResponse = OffscreenSendResponse | OffscreenAckResponse;
 
-export function isOffscreenEventMessage(message: unknown): message is OffscreenEventMessage {
-  return (
-    typeof message === "object" &&
-    message !== null &&
-    "namespace" in message &&
-    (message as { namespace?: unknown }).namespace === "rtc" &&
-    "target" in message &&
-    (message as { target?: unknown }).target === "background" &&
-    "action" in message &&
-    typeof (message as { action?: unknown }).action === "string"
-  );
-}
-
 export function isOffscreenCommandMessage(message: unknown): message is OffscreenCommandMessage {
   return (
     typeof message === "object" &&

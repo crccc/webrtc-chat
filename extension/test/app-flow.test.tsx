@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App from "../src/App";
+import App from "../src/sidepanel/App";
 
 const connect = vi.fn();
 const disconnect = vi.fn();
@@ -18,7 +18,7 @@ let sessionState = {
   capacity: 8,
 };
 
-vi.mock("../src/hooks/useWebSocket", () => ({
+vi.mock("../src/sidepanel/hooks/useWebSocket", () => ({
   useWebSocket: () => ({
     connect,
     disconnect,
@@ -27,11 +27,11 @@ vi.mock("../src/hooks/useWebSocket", () => ({
   }),
 }));
 
-vi.mock("../src/utils/uuid", () => ({
+vi.mock("../src/shared/uuid", () => ({
   generateUuidV4: vi.fn(() => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
 }));
 
-vi.mock("../src/utils/storage", () => ({
+vi.mock("../src/shared/storage", () => ({
   getCreatedRoomId: vi.fn(async () => createdRoomIdStore),
   setCreatedRoomId: vi.fn(async (roomId) => {
     createdRoomIdStore = roomId;
@@ -45,7 +45,7 @@ vi.mock("../src/utils/storage", () => ({
   }),
 }));
 
-vi.mock("../src/config/runtime", () => ({
+vi.mock("../src/shared/runtimeConfig", () => ({
   getDefaultDevSignalingUrl: vi.fn(() => "ws://localhost:8888"),
 }));
 

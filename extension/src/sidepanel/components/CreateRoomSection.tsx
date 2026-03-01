@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
-import { generateUuidV4 } from '../utils/uuid'
-import type { RoomFormPayload } from '../types'
+import { generateUuidV4 } from '../../shared/uuid'
+import type { RoomFormPayload } from '../../shared/sessionTypes'
 
 interface CreateRoomSectionProps {
   onCreate: (payload: RoomFormPayload) => void

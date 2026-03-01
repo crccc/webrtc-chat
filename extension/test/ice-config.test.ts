@@ -3,7 +3,7 @@ import {
   DEFAULT_ICE_SERVERS,
   getIceConfiguration,
   resolveIceServers,
-} from "../src/webrtc/iceConfig";
+} from "../src/offscreen/iceConfig";
 
 describe("iceConfig", () => {
   afterEach(() => {

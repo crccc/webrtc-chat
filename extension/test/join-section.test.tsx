@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import JoinSection from "../src/components/JoinSection";
+import JoinSection from "../src/sidepanel/components/JoinSection";
 
 afterEach(() => {
   cleanup();

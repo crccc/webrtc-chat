@@ -1,10 +1,10 @@
-import { getIceConfiguration } from "../webrtc/iceConfig";
+import { getIceConfiguration } from "./iceConfig";
 import {
   decodeChannelMessage,
   shouldInitiateOffer,
   type ParsedChannelMessage,
-} from "./sessionManager";
-import type { RtcSignalAction } from "./offscreenProtocol";
+} from "../shared/session";
+import type { RtcSignalAction } from "../shared/rtcProtocol";
 
 interface PeerConnectionEntry {
   pc: RTCPeerConnection;

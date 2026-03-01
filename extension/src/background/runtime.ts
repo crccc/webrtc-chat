@@ -2,8 +2,11 @@ import {
   handleSessionMessageSafely,
   type BackgroundSessionController,
   isRuntimeSessionMessage,
-} from "./runtime";
-import type { BackgroundSessionSnapshot, RuntimeSessionMessage } from "../types";
+} from "./messageRouter";
+import type {
+  BackgroundSessionSnapshot,
+  RuntimeSessionMessage,
+} from "../shared/sessionTypes";
 
 export interface BackgroundRuntimeController extends BackgroundSessionController {
   subscribe: (listener: (snapshot: BackgroundSessionSnapshot) => void) => () => void;

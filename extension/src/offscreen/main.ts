@@ -1,8 +1,8 @@
 import {
   isOffscreenCommandMessage,
   type OffscreenCommandResponse,
-} from "../session/offscreenProtocol";
-import { createRtcPeerManager } from "../session/rtcPeerManager";
+} from "../shared/rtcProtocol";
+import { createRtcPeerManager } from "./rtcPeerManager";
 
 const rtcManager = createRtcPeerManager({
   onSignal(action, to, payload) {

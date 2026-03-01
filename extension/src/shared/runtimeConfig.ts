@@ -36,9 +36,10 @@ function isValidWebSocketUrl(value: string): boolean {
 export function resolveSignalingEndpoint(
   env: RuntimeEnvShape = import.meta.env,
 ): SignalingEndpointResolution {
-  const raw = typeof env.PEER_BRIDGE_SIGNALING_URL === "string"
-    ? env.PEER_BRIDGE_SIGNALING_URL.trim()
-    : "";
+  const raw =
+    typeof env.PEER_BRIDGE_SIGNALING_URL === "string"
+      ? env.PEER_BRIDGE_SIGNALING_URL.trim()
+      : "";
 
   if (raw) {
     if (!isValidWebSocketUrl(raw)) {

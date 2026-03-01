@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react'
-import type { ChatMessage, Role } from '../types'
+import type { ChatMessage, Role } from '../../shared/sessionTypes'
 
 interface ChatSectionProps {
   roomId: string
